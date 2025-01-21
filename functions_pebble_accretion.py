@@ -4,17 +4,23 @@ import astropy.constants as const
 import matplotlib.pyplot as plt
 from functions import *
 
+### UNITS AND CONVERSIONS ######
+# masses -> earth masses
+# times -> Myr
+# lengths -> au
+
+
 ## PEBBLE ACCRETION FUNCTIONS ###
-def M_dot_ThreeD_unif(position: u.cm, t: u.s, mass: u.g, sigma_peb: u.g/u.cm**2, St, params) -> u.g/u.s:
+def M_dot_ThreeD_unif(position, t, mass, sigma_peb, St, params):
     """Three D accretion for both regimes using t_enc = t_sett, according to Ormel chapter"""
     test = 6*np.pi*R_H(position, mass, params)**3*St*omega_k(position, params)*sigma_peb/(np.sqrt(2*np.pi)*H_peb(St, position, t, params))
     return test
      
-def M_dot_ThreeD(position: u.cm, t:u.s, R_acc: u.cm, sigma_peb: u.g/u.cm**2, v_acc: u.cm/u.s, St, params)-> u.g/u.s:
+def M_dot_ThreeD(position, t, R_acc, sigma_peb, v_acc, St, params):
     #Three D accretion according to (A.7) of LM19
     return np.pi*R_acc**2*v_acc*sigma_peb/(np.sqrt(2*np.pi)*H_peb(St, position,t, params))
 
-def M_dot_TwoD(R_acc: u.cm, sigma_peb: u.g/u.cm**2, v_acc: u.cm/u.s)-> u.g/u.s:
+def M_dot_TwoD(R_acc, sigma_peb, v_acc):
     #Two D accretion according to (A.7) of LM19
     return 2*R_acc*v_acc*sigma_peb
 
@@ -227,7 +233,7 @@ class PebbleAccretion:
         H_r = H_R(position, t, params)
         return dMc_dt, R_acc, H_peb(St, position, t, params)*(2*np.sqrt(2*np.pi)/np.pi), R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_threeD_unif, sigma_peb, sigma_gas, H_r, self.acc_regime_dict   
 
-    def dMc_dt_f(self, t: u.s, M_core: u.g, position: u.cm, flux: u.g/u.s, flux_reduction_factor, params, sim_params) -> u.g/u.s:
+    def dMc_dt_f(self, t, M_core, position, flux, flux_reduction_factor, params, sim_params):
         #core accretion rate according to equation (28) of LJ14, filtering fraction passed as an argument
 
         flux_reduced = flux_reduction_factor*flux
@@ -254,11 +260,11 @@ class PebbleAccretion:
         return dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r, acc_reg_dict
 
 ################## GAS ACCRETION FUNCTIONS ####################
-def M_dot_gas_KH( M_core: u.g, params) -> u.g/u.s:
+def M_dot_gas_KH( M_core, params):
     """Kevin-Helmholtz envelope contraction from equation (52) in Nerea's paper"""
-    return (10**(-5)*u.M_earth/u.yr).to(u.g/u.s)*(M_core/(10*u.M_earth).to(u.g))**4*(params.kappa/(0.1*u.m**2/u.kg).to(u.cm**2/u.g))**(-1)
+    return 10**(-5)*(M_core/10)**4*(params.kappa/(0.1*u.m**2/u.kg).to(u.au**2/u.M_earth))**(-1)
 
-def M_dot_gas_runaway(position: u.cm, M_core: u.g, t: u.s, sigma_gas: u.g/u.cm**2, params) -> u.g/u.s:
+def M_dot_gas_runaway(position, M_core, t, sigma_gas, params):
     """Runaway gas accretion from equation (53) in Nerea's paper"""
     return 0.29*H_R(position, t, params)**(-2)*(M_core/params.star_mass)**(4/3)*sigma_gas*position**2*omega_k(position, params)*sigma_gap_sigma_gas(position, M_core,t,params)
 
@@ -325,7 +331,7 @@ class GasAccretion:
                             gas_acc["masses"]["disc gas accretion"] = m.to(u.earthMass)
                             gas_acc["printed_gas"] = True
 
-    def dMc_dt_gas(self, t: u.s, M_core: u.g, position: u.cm, params, sim_params) -> u.g/u.s:
+    def dMc_dt_gas(self, t, M_core, position, params, sim_params):
 
         KH_accretion = M_dot_gas_KH(M_core, params)
         print("KH accretion", KH_accretion)
@@ -366,14 +372,14 @@ class GasAccretion:
 
 
 
-def dR_dt(t: u.s, position: u.cm, M_core: u.g, sigma_g: u.g/u.cm**2, params)-> u.cm/u.s:
+def dR_dt(t, position, M_core, sigma_g, params):
 	"""type one migration according to equation 36 of LJ14 """
 	 
 	c = 2.8
 	dr_dt = -c*M_core/(params.star_mass**2)*sigma_g*position**2*H_R(position, t, params)**(-2)*v_k(position, params)
 	return dr_dt
 
-def dR_dt_both(t: u.s, position: u.cm, M_core: u.g, sigma_g: u.g/u.cm**2, params)-> u.cm/u.s:
+def dR_dt_both(t, position, M_core, sigma_g, params):
     """type one migration according to equation 36 of LJ14 and equation 51 of nerea's paper"""
      
     c = 2.8

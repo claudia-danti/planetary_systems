@@ -12,6 +12,10 @@ from functions import *
 from functions_pebble_accretion import *
 from functions_plotting import *
 
+#### UNITS AND CONVERSIONS ####
+Gauss_to_au_M_E_myr = (1*u.cm**(-1/2)*u.g**(1/2)/u.s).to(u.au**(-1/2)*u.M_earth**(1/2)/u.Myr).value
+erg_cgs = (1*u.erg).to(u.cm**2*u.g/u.s**2).value
+erg_to_au_M_E_Myr = (1*u.erg).to(u.au**2*u.M_earth/u.Myr**2).value
 
 class SimulationEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -31,15 +35,15 @@ class SimulationEncoder(json.JSONEncoder):
 @dataclass
 class Params:
     #stellar parameters 
-    star_mass: u.Quantity = const.M_sun.cgs
-    star_radius: u.Quantity = const.R_sun.cgs
-    star_luminosity: u.Quantity = const.L_sun.cgs 
-    star_magnetic_field: u.Quantity = 1e3*u.cm**(-1/2)*u.g**(1/2)/u.s #=1*u.G 1
-    M_dot_star: Optional[u.Quantity] = None #1e-8*const.M_sun.cgs/((1*u.yr).to(u.s))
+    star_mass: float = (const.M_sun).to(u.M_earth).value
+    star_radius: float = (const.R_sun).to(u.au).value
+    star_luminosity: float = (const.L_sun.cgs).value *erg_to_au_M_E_Myr
+    star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1*u.G 1
+    M_dot_star: Optional[float] = None #1e-8*const.M_sun.cgs/((1*u.yr).to(u.s))
 
     #disc parameters
     iso_filtering: float = 1
-    tau_disc: u.Quantity = (3 * u.Myr).to(u.s)
+    tau_disc: float= (3 * u.Myr).value
     disc_opacity: float = 1e-2
     Z: float = 0.01 
     alpha: float = 1e-3
@@ -47,9 +51,9 @@ class Params:
     alpha_z: float = 1e-4
     alpha_z_out: float = 1e-4   #value of alpha_z outside the iceline if iceline_alpha_change (replaces alpha_z)
     alpha_z_in: float = 10*alpha_z_out  #value of alpha_z outside the iceline if iceline_alpha_change (replaces alpha_z)
-    iceline_radius: Optional[u.Quantity] = (2 * u.au).to(u.cm)
+    iceline_radius: Optional[float] = None
     St_const: Optional[float] = None
-    v_frag: u.Quantity = (1 * u.m/u.s).to(u.cm/u.s)
+    v_frag: float = (1 * u.m/u.s).to(u.au/u.Myr).value
     H_r_model: str = "Lambrechts_mixed"  #4 possible models: Ida_mixed, Liu_mixed, irradiated (flared Ida), flared (Bitsch), flat, Lambrechts_mixed
     dlnP_dlnR: float = -2
     epsilon_el: float = 1e-2
@@ -57,9 +61,9 @@ class Params:
     a_gr: u.Quantity  = (0.1*u.mm).to(u.cm)
     rho_gr: u.Quantity  = 1*u.g/u.cm**3
     mu: float = 2.34 #mean molecular weight
-    cross_sec_H: u.Quantity = 2e-15*u.cm**2 #collisional cross section of H2
+    cross_sec_H: float = 2e-15*u.cm**2 #collisional cross section of H2
     kappa: u.Quantity = (0.005*u.m**2/u.kg).to(u.cm**2/u.g) #envelope opacity
-    beta0: u.Quantity = 500 * u.g / u.cm**2
+    beta0: float = (500 * u.g / u.cm**2).to(u.earthMass / u.au**2).value #surface density of the envelope
     epsilon_p: float = 0.5
     epsilon_d: float = 0.05
     iceline_alpha_change: bool = False
@@ -75,38 +79,27 @@ class Params:
 @dataclass
 class SimulationParams:
     # integration parameters
-    t_in: u.Quantity = (1e5 * u.yr).to(u.s)
-    t_fin: u.Quantity = (10 * u.Myr).to(u.s)
-    N_step: float = 1
+    t_in: float = 0.1 #Myr
+    t_fin: float = 10 #Myr
+    N_step: float = 10000
+    
     tolerance: float = 1e-2
     mig_tolerance: float = 1e-3
 
     # sepcifying the step size needs to be computed based on the input of N_step
     step_size: float = field(init=False)
     t: np.array = field(init=False)
-    t_span: tuple = field(init=False)
 
     # initial mass and position arrays for the two planets
-    m0: u.Quantity = (np.array([(1e-3 * u.earthMass).to(u.g).value,
-                                (1e-3 * u.earthMass).to(u.g).value,
-                                (1e-3 * u.earthMass).to(u.g).value,
-                                (1e-3 * u.earthMass).to(u.g).value,
-                                (1e-3 * u.earthMass).to(u.g).value,
-                                ])* u.g)
+    m0: np.array = np.array([1e-3, 1e-3, 1e-3, 1e-3, 1e-3]) #M_earth
     
-    a_p0: u.Quantity = (np.array([(20 * u.au).to(u.cm).value,
-                                  (15 * u.au).to(u.cm).value,
-                                  (10 * u.au).to(u.cm).value,
-                                  (5 * u.au).to(u.cm).value,
-                                  (1 * u.au).to(u.cm).value,
-                                  ])* u.cm)
+    a_p0: np.array = np.array([20, 15, 10, 5, 2]) #au
 
-    t0: u.Quantity = ([1e5] * np.ones(len(a_p0)) * u.yr).to(u.s) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
+    t0: np.array = [0.1] * np.ones(len(a_p0)) #Myr # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
     
     def __post_init__(self):
             self.step_size = (self.t_fin - self.t_in) / self.N_step
-            self.t = np.geomspace(self.t_in.value, self.t_fin.value, int(self.N_step)) * self.t_in.unit
-            self.t_span = (self.t_in.value, self.t_fin.value)
+            self.t = np.geomspace(self.t_in, self.t_fin, int(self.N_step))
 
   
     @property
@@ -148,37 +141,37 @@ gas_acc = GasAccretion()
 
 
 def evolve_system(
-    times: u.s, masses: u.g, positions: u.cm, migration, filtering, peb_acc, gas_acc, params, sim_params):
+    times, masses, positions, migration, filtering, peb_acc, gas_acc, params, sim_params):
     """Function that computes the dM/dt, dR/dt and filter fraction"""
 
     # checks if the planets are in the correct order, throws error if they swap position
     # if not np.all(positions[:-1] >= positions[1:]):
     # print('ERROR: PLANETS IN WRONG ORDER')
     # exit()
-    # Allocate empty arrays of the right units filled with 0's
+    # Allocate empty arrays of filled with 0's
     # They are matrixes: [number of planets x times]
-    M_dot = np.zeros_like(masses) / u.s
-    R_dot = np.zeros_like(positions) / u.s
+    M_dot = np.zeros_like(masses) 
+    R_dot = np.zeros_like(positions)
     R_acc = np.zeros_like(positions)
     H_peb = np.zeros_like(positions)
 
     #debug quantities
     R_acc_H = np.zeros_like(positions)
     R_acc_B = np.zeros_like(positions)
-    M_dot_twoD_B = np.zeros_like(masses) / u.s
-    M_dot_twoD_H = np.zeros_like(masses) / u.s
-    M_dot_threeD_B = np.zeros_like(masses) / u.s
-    M_dot_threeD_H = np.zeros_like(masses) / u.s
-    M_dot_threeD_unif = np.zeros_like(masses) / u.s
+    M_dot_twoD_B = np.zeros_like(masses)
+    M_dot_twoD_H = np.zeros_like(masses)
+    M_dot_threeD_B = np.zeros_like(masses) 
+    M_dot_threeD_H = np.zeros_like(masses)
+    M_dot_threeD_unif = np.zeros_like(masses)
 
-    sigma_peb = np.zeros_like(masses) / u.cm**2
-    sigma_gas = np.zeros_like(masses) / u.cm**2
-    H_r = np.zeros(positions.shape) #is a value without units
+    sigma_peb = np.zeros_like(masses) 
+    sigma_gas = np.zeros_like(masses) 
+    H_r = np.zeros(positions.shape)
 
     # Flux on the planet i is obtained as: F_i = prod_0^i ( F0 * (1-f_i) )  with f_i filter fraction of the planet i
     flux_reduction = np.ones(1)   # initial reduction of flux (1D vector of timestep -> is an intermediate quantity updated every timestep)
     filter_frac = np.zeros(masses.shape)  # accreted pebble fraction on the planets (2D matrix [planets x times])
-    flux_on_planet = (np.zeros_like(masses) / u.s)  # accreted pebble fraction on the planets (2D matrix [planets x times])
+    flux_on_planet = np.zeros_like(masses) # accreted pebble fraction on the planets (2D matrix [planets x times])
     flux_ratio = np.zeros(masses.shape) # ratio of the accreted pebble flux and the incoming flux
     
     #F0_nominal = (100*u.earthMass/u.Myr).to(u.g/u.s)
@@ -187,29 +180,29 @@ def evolve_system(
     F0_nominal = flux_dtg_t(times, params)
     #F0_nominal = flux_const(times, params, sim_params)
 
-    print("F0_nominal: ",F0_nominal.to(u.earthMass/u.Myr))
+    print("F0_nominal: ", F0_nominal*(u.earthMass/u.Myr))
 
-    pos_previous = np.zeros_like(positions)*u.cm #to check if the planets overtake each other
+    pos_previous = np.zeros_like(positions) #to check if the planets overtake each other
     pos_out = positions[0] #to kill the planets if they overtake each other
     
     for i in range(sim_params.nr_planets):
 
         # Iceline treatment: cuts the flux in half, increases the vertical stirring
         if params.iceline_alpha_change:
-            params.update_alpha_z_iceline(positions[i], iceline(times, 170*u.K, params))
+            params.update_alpha_z_iceline(positions[i], iceline(times, 170, params))
             
         if params.iceline_flux_change:
             if params.iceline_radius == None:
-                iceline_radius = iceline(times, 170*u.K, params)
-                print("current iceline position: ", iceline_radius.to(u.au))
+                iceline_radius = iceline(times, 170, params)
+                print("current iceline position: ", iceline_radius)
             else:
                 iceline_radius = params.iceline_radius
             F0 = np.where(positions[i] < iceline_radius, 1/2, 1)*F0_nominal
         else: 
             F0 = F0_nominal
 
-        print("Planet "+str(positions[i].to(u.au))[:4]+", F0: ", F0.to(u.earthMass/u.Myr))
-        print("Planet "+str(positions[i].to(u.au))[:4]+", M_dot_star: ", M_dot_star(times, params).to(u.M_sun/u.yr))
+        print("Planet "+str(positions[i].to(u.au))[:4]+", F0: ", F0*(u.earthMass/u.Myr))
+        print("Planet "+str(positions[i].to(u.au))[:4]+", M_dot_star: ", M_dot_star(times, params)*(u.M_earth/u.Myr))
 
         # to flag the accretion regime we are in
         peb_acc._set_planet_id (i)
@@ -246,10 +239,10 @@ def evolve_system(
                 #if np.isclose((pos_out/positions[i])**(3/2), 2, rtol=1e-2, atol=1e-02, equal_nan=False) and ((pos_out/positions[i])**(3/2))!= 1:
                     #R_dot[i] = 0
                     R_dot[i-1] = 0
-                    print("2:1 MMR reached for planets "+str(pos_out.to(u.au))[:4]+" and "+str(positions[i].to(u.au))[:4])
+                    print("2:1 MMR reached for planets "+str(pos_out)[:4]+" and "+str(positions[i])[:4])
                     #positions[i] = meanmr_two_one_in(pos_out)
                     positions[i-1] = meanmr_two_one_out(positions[i])
-                    print("New positions: ", positions[i].to(u.au), positions[i-1].to(u.au))
+                    print("New positions: ", positions[i], positions[i-1])
                     print("MMR ratio of positions ", (positions[i-1]/positions[i])**(3/2))
                 else:
                     #to keep migrating the planets after they reach peb iso
@@ -258,9 +251,9 @@ def evolve_system(
                     positions[i, dead_by_mig] = r_magnetic_cavity_gen(times, params)  # set the position to the inner edge
                                 
                     if dead_by_mig:
-                        print("Planet "+str(positions[i].to(u.au))[:4]+" reached the inner edge")
-                        print("R_planet", positions[i].to(u.au))
-                        print("magentic cavity", r_magnetic_cavity_gen(times, params).to(u.au))
+                        print("Planet "+str(positions[i])[:4]+" reached the inner edge")
+                        print("R_planet", positions[i])
+                        print("magentic cavity", r_magnetic_cavity_gen(times, params))
             else:
                 #to keep migrating the planets after they reach peb iso
                 dead_by_mig = (positions[i] < r_magnetic_cavity_gen(times, params))
@@ -269,9 +262,9 @@ def evolve_system(
                 positions[i, dead_by_mig] = r_magnetic_cavity_gen(times, params)  # set the position to the inner edge
                             
                 if dead_by_mig:
-                    print("Planet "+str(positions[i].to(u.au))[:4]+" reached the inner edge")
-                    print("R_planet", positions[i].to(u.au))
-                    print("magentic cavity", r_magnetic_cavity_gen(times, params).to(u.au))
+                    print("Planet "+str(positions[i])[:4]+" reached the inner edge")
+                    print("R_planet", positions[i])
+                    print("magentic cavity", r_magnetic_cavity_gen(times, params))
                 
             #to check if the planets overtake each other
             for j in range(i):
@@ -322,32 +315,32 @@ def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params):
     args = (migration, filtering, peb_acc, gas_acc, params, sim_params)
 
     # creating the arrays that will be updated every timestep by appending the solution, so far they are 1D arrays
-    t_values = np.array([sim_params.t[0].value])*u.s # 1D with the t initial value
-    mass_values = np.array([sim_params.m0.value])*u.g # 1D with the initial mass value
-    pos_values = np.array([sim_params.a_p0.value])*u.cm # 1D with the initial position value
+    t_values = np.array([sim_params.t[0].value]) # 1D with the t initial value
+    mass_values = np.array([sim_params.m0.value]) # 1D with the initial mass value
+    pos_values = np.array([sim_params.a_p0.value]) # 1D with the initial position value
     
     # I run the first time the diff eq to have the right first values for the other quantities
     m_dot, r_dot, filter_f, flux_p, flux , flux_ratio, R_acc, H_peb, R_acc_H, R_acc_B, Mdot_twoD_B, Mdot_twoD_H, Mdot_threeD_B, Mdot_threeD_H, Mdot_threeD_unif, Sigma_peb, Sigma_gas, HR, acc_regimes, gas_acc_dict = evolve_system(t_values[0], mass_values[0], pos_values[0], *args)
     
-    Mdot_values = np.array([m_dot])*u.g/u.s # 1D (nr_planets) with values of 0 
-    Rdot_values = np.array([r_dot])*u.cm/u.s # 1D (nr_planets) with values of 0 
+    Mdot_values = np.array([m_dot]) # 1D (nr_planets) with values of 0 
+    Rdot_values = np.array([r_dot])# 1D (nr_planets) with values of 0 
     filter_values = np.array([filter_f]) # 1D (nr_planets) with values of 0 
-    planet_flux_values = np.array([flux_p])*u.g/u.s # 1D (nr_planets) with values of 0 
-    F0_values = np.array([flux.value])*u.g/u.s # 1D (nr_planets) with values of flux (t, pos[0])
+    planet_flux_values = np.array([flux_p]) # 1D (nr_planets) with values of 0 
+    F0_values = np.array([flux.value]) # 1D (nr_planets) with values of flux (t, pos[0])
     flux_ratio_values = np.array([flux_ratio]) # 1D (nr_planets) with values of flux (t, pos[0])
 
     # debug quantities
-    r_acc = np.array([R_acc])*u.cm
-    h_peb = np.array([H_peb])*u.cm
-    r_acc_h = np.array([R_acc_H])*u.cm
-    r_acc_b = np.array([R_acc_B])*u.cm
-    mdot_twod_bondi = np.array([Mdot_twoD_B])*u.g/u.s 
-    mdot_twod_hill = np.array([Mdot_twoD_H])*u.g/u.s 
-    mdot_threed_bondi = np.array([Mdot_threeD_B])*u.g/u.s 
-    mdot_threed_hill = np.array([Mdot_threeD_H])*u.g/u.s 
-    mdot_threed_unif = np.array([Mdot_threeD_unif])*u.g/u.s 
-    sigma_peb = np.array([Sigma_peb])*u.g/u.cm**2
-    sigma_gas = np.array([Sigma_gas])*u.g/u.cm**2
+    r_acc = np.array([R_acc])
+    h_peb = np.array([H_peb])
+    r_acc_h = np.array([R_acc_H])
+    r_acc_b = np.array([R_acc_B])
+    mdot_twod_bondi = np.array([Mdot_twoD_B])
+    mdot_twod_hill = np.array([Mdot_twoD_H])
+    mdot_threed_bondi = np.array([Mdot_threeD_B])
+    mdot_threed_hill = np.array([Mdot_threeD_H]) 
+    mdot_threed_unif = np.array([Mdot_threeD_unif]) 
+    sigma_peb = np.array([Sigma_peb])
+    sigma_gas = np.array([Sigma_gas])
     H_r = np.array([HR])
 
 
