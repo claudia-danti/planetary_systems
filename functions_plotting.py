@@ -21,11 +21,11 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
     #Creates the index dictionary
 
     idx_or_last = lambda fltr: np.argmax(fltr) if np.any(fltr) else fltr.size
-    isolation_mass = M_peb_iso(position, time, params)
+    isolation_mass = M_peb_iso(position.value, time.value, params)
     stop_idx = np.argmin(position) #returns the position of the min value of position
     stop_mass_idx = np.any(np.where(dM_dt == 0)[0][0]) if np.any(np.where(dM_dt == 0)[0]) else dM_dt.size
 
-    isolation_idx = np.where(mass > isolation_mass)[0]
+    isolation_idx = np.where(mass.value > isolation_mass)[0]
     if isolation_idx.size > 0:
         isolation_idx = isolation_idx[0]
     else:
@@ -39,7 +39,7 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
             stop_mig_idx = len(dR_dt) - 1  # or some other default value
         # Returns the position of the first time for which r < r_mag
         #returns the position of the first time for which r<r_mag 
-        inner_edge_idx = idx_or_last(position < r_magnetic_cavity(time, params))
+        inner_edge_idx = idx_or_last(position.value < r_magnetic_cavity(time.value, params))
         if stop_idx < inner_edge_idx:
             coll_or_res_idx = stop_idx
             end_idx = min(inner_edge_idx, coll_or_res_idx)
@@ -258,7 +258,8 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
         stop_mass_idx = idx_df['stop_mass_idx'].values[0]
         pos = np.geomspace(1e-2,200, num=sim_params.N_step+1)
         norm=mpl.colors.LogNorm(vmin = (1e5*u.yr).to(u.Myr).value, vmax = (3e6*u.yr).to(u.Myr).value)
-        print('planet '+str(sim_params.a_p0[p].to(u.au))+" iso mass at ", sim.time[isolation_idx].to(u.Myr) if isolation_idx < sim.mass[p].size else "no iso, end of sim")
+        print(sim.time)
+        print('planet '+str(sim_params.a_p0[p]*(u.au))+" iso mass at ", sim.time[isolation_idx].to(u.Myr) if isolation_idx < sim.mass[p].size else "no iso, end of sim")
         #print('inner', inner_edge_idx)
         #plot the growth track with color coding gven by the time it takes to grow
         #scatter grey points after they reach isolation mass
@@ -304,17 +305,18 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
         
    
     # #plot the initial mass line
+    print(sim_params.t_in)
     a_p0 = np.geomspace(1e-3, 1e2, num = 1000)
-    m0 = M0_pla((a_p0*u.au).to(u.cm), sim_params.t_in, sigma_gas_steady_state((a_p0*u.au).to(u.cm), sim_params.t_in, params), params)
-    axs.loglog(a_p0, m0.to(u.earthMass), linestyle  = ':', color = 'lightblue', zorder = 0)
+    m0 = M0_pla(a_p0, sim_params.t_in, sigma_gas_steady_state(a_p0, sim_params.t_in, params), params)
+    axs.loglog(a_p0, m0, linestyle  = ':', color = 'lightblue', zorder = 0)
     #plot the isolation mass line
-    axs.loglog(a_p0*u.au, M_peb_iso((a_p0*u.au).to(u.cm), sim_params.t_in, params).to(u.M_earth), color = "slateblue", linestyle =':', zorder = 0)
-    axs.loglog(a_p0*u.au, M_peb_iso((a_p0*u.au).to(u.cm), sim_params.t_fin, params).to(u.M_earth), color = "slateblue", linestyle =':', zorder = 0)
+    axs.loglog(a_p0, M_peb_iso(a_p0, sim_params.t_in, params), color = "slateblue", linestyle =':', zorder = 0)
+    axs.loglog(a_p0, M_peb_iso(a_p0, sim_params.t_fin, params), color = "slateblue", linestyle =':', zorder = 0)
 
     #plot the magnetic cavity and shade the region inside it (from initial to final position)
-    axs.axvline(r_magnetic_cavity_gen(sim_params.t_in, params).to(u.au).value, linestyle = '-.', color = 'grey', alpha = 0.05)
-    axs.axvline(r_magnetic_cavity_gen(sim_params.t_fin, params).to(u.au).value, linestyle = '-.', color = 'grey', alpha = 0.05)
-    axs.axvspan(r_magnetic_cavity_gen(sim_params.t_in, params).to(u.au).value, r_magnetic_cavity_gen(sim_params.t_fin, params).to(u.au).value,facecolor='none', hatch='/', edgecolor='gray', alpha =0.05)
+    axs.axvline(r_magnetic_cavity(sim_params.t_in, params), linestyle = '-.', color = 'grey', alpha = 0.05)
+    axs.axvline(r_magnetic_cavity(sim_params.t_fin, params), linestyle = '-.', color = 'grey', alpha = 0.05)
+    axs.axvspan(r_magnetic_cavity(sim_params.t_in, params), r_magnetic_cavity(sim_params.t_fin, params),facecolor='none', hatch='/', edgecolor='gray', alpha =0.05)
 
     axs.tick_params(axis = "both", length = 15)
     axs.tick_params(axis = "both", length = 10, which = "minor")

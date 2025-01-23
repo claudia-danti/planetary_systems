@@ -15,7 +15,7 @@ from functions_plotting import *
 #### UNITS AND CONVERSIONS ####
 Gauss_to_au_M_E_myr = (1*u.cm**(-1/2)*u.g**(1/2)/u.s).to(u.au**(-1/2)*u.M_earth**(1/2)/u.Myr).value
 erg_cgs = (1*u.erg).to(u.cm**2*u.g/u.s**2).value
-erg_to_au_M_E_Myr = (1*u.erg).to(u.au**2*u.M_earth/u.Myr**2).value
+erg_s_to_au_M_E_Myr = (1*u.erg/u.s).to(u.au**2*u.M_earth/u.Myr**3).value
 
 class SimulationEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -37,7 +37,7 @@ class Params:
     #stellar parameters 
     star_mass: float = (const.M_sun).to(u.M_earth).value
     star_radius: float = (const.R_sun).to(u.au).value
-    star_luminosity: float = (const.L_sun.cgs).value *erg_to_au_M_E_Myr
+    star_luminosity: float = (const.L_sun.cgs).value *erg_s_to_au_M_E_Myr
     star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1*u.G 1
     M_dot_star: Optional[float] = None #1e-8*const.M_sun.cgs/((1*u.yr).to(u.s))
 
@@ -58,11 +58,11 @@ class Params:
     dlnP_dlnR: float = -2
     epsilon_el: float = 1e-2
     epsilon_heat: float = 0.5
-    a_gr: u.Quantity  = (0.1*u.mm).to(u.cm)
-    rho_gr: u.Quantity  = 1*u.g/u.cm**3
+    a_gr: u.Quantity  = (0.1*u.mm).to(u.au).value
+    rho_gr: u.Quantity  = (1*u.g/u.cm**3).to(u.M_earth/u.au**3).value
     mu: float = 2.34 #mean molecular weight
     cross_sec_H: float = 2e-15*u.cm**2 #collisional cross section of H2
-    kappa: u.Quantity = (0.005*u.m**2/u.kg).to(u.cm**2/u.g) #envelope opacity
+    kappa: u.Quantity = (0.005*u.m**2/u.kg).value #envelope opacity
     beta0: float = (500 * u.g / u.cm**2).to(u.earthMass / u.au**2).value #surface density of the envelope
     epsilon_p: float = 0.5
     epsilon_d: float = 0.05
@@ -92,9 +92,7 @@ class SimulationParams:
 
     # initial mass and position arrays for the two planets
     m0: np.array = np.array([1e-3, 1e-3, 1e-3, 1e-3, 1e-3]) #M_earth
-    
     a_p0: np.array = np.array([20, 15, 10, 5, 2]) #au
-
     t0: np.array = [0.1] * np.ones(len(a_p0)) #Myr # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
     
     def __post_init__(self):
@@ -174,13 +172,8 @@ def evolve_system(
     flux_on_planet = np.zeros_like(masses) # accreted pebble fraction on the planets (2D matrix [planets x times])
     flux_ratio = np.zeros(masses.shape) # ratio of the accreted pebble flux and the incoming flux
     
-    #F0_nominal = (100*u.earthMass/u.Myr).to(u.g/u.s)
     ###### NOMINAL FLUX ########
-
     F0_nominal = flux_dtg_t(times, params)
-    #F0_nominal = flux_const(times, params, sim_params)
-
-    print("F0_nominal: ", F0_nominal*(u.earthMass/u.Myr))
 
     pos_previous = np.zeros_like(positions) #to check if the planets overtake each other
     pos_out = positions[0] #to kill the planets if they overtake each other
@@ -201,8 +194,8 @@ def evolve_system(
         else: 
             F0 = F0_nominal
 
-        print("Planet "+str(positions[i].to(u.au))[:4]+", F0: ", F0*(u.earthMass/u.Myr))
-        print("Planet "+str(positions[i].to(u.au))[:4]+", M_dot_star: ", M_dot_star(times, params)*(u.M_earth/u.Myr))
+        print("Planet "+str(positions[i])[:4]+", F0: ", F0*(u.earthMass/u.Myr))
+        print("Planet "+str(positions[i])[:4]+", M_dot_star: ", M_dot_star(times, params)*(u.M_earth/u.Myr).to(u.M_sun/u.yr))
 
         # to flag the accretion regime we are in
         peb_acc._set_planet_id (i)
@@ -210,7 +203,6 @@ def evolve_system(
         # to flag the gas accretion regime we are in
         gas_acc._set_planet_id (i)
         gas_acc.create_dict_planet_entry(i)
-
 
         # Diff equation for mass growth [planets x times]
         M_dot[i], R_acc[i], H_peb[i], R_acc_H[i], R_acc_B[i], M_dot_twoD_B[i], M_dot_twoD_H[i],M_dot_threeD_B[i], M_dot_threeD_H[i], M_dot_threeD_unif[i], sigma_peb[i], sigma_gas[i], H_r[i], acc_regimes = peb_acc.dMc_dt_f(times, masses[i], positions[i], F0, flux_reduction, params, sim_params)
@@ -221,12 +213,8 @@ def evolve_system(
 
         # option for migration
         if migration:
-            if params.H_r_model != "flat":
-                sigma_gas_val = sigma_gas_steady_state(positions[i], times, params)
-                print("Sigma gas:", sigma_gas_val)
-            else:
-                sigma_gas_val = sigma_gas_t(positions[i], times, params)
-            
+            sigma_gas_val = sigma_gas_steady_state(positions[i], times, params)
+            print("Sigma gas:", sigma_gas_val)
                 
             #R_dot[i] = dR_dt(times, positions[i], masses[i], sigma_gas_val, params)
             R_dot[i] = dR_dt_both(times, positions[i], masses[i], sigma_gas_val, params) #includes type II prescription
@@ -246,25 +234,25 @@ def evolve_system(
                     print("MMR ratio of positions ", (positions[i-1]/positions[i])**(3/2))
                 else:
                     #to keep migrating the planets after they reach peb iso
-                    dead_by_mig = (positions[i] < r_magnetic_cavity_gen(times, params))
+                    dead_by_mig = (positions[i] < r_magnetic_cavity(times, params))
                     R_dot[i, dead_by_mig] = 0  # dR/dt = 0 in case the planet has reached the inner edge 
-                    positions[i, dead_by_mig] = r_magnetic_cavity_gen(times, params)  # set the position to the inner edge
+                    positions[i, dead_by_mig] = r_magnetic_cavity(times, params)  # set the position to the inner edge
                                 
                     if dead_by_mig:
                         print("Planet "+str(positions[i])[:4]+" reached the inner edge")
                         print("R_planet", positions[i])
-                        print("magentic cavity", r_magnetic_cavity_gen(times, params))
+                        print("magentic cavity", r_magnetic_cavity(times, params))
             else:
                 #to keep migrating the planets after they reach peb iso
-                dead_by_mig = (positions[i] < r_magnetic_cavity_gen(times, params))
+                dead_by_mig = (positions[i] < r_magnetic_cavity(times, params))
                 R_dot[i, dead_by_mig] = 0  # dR/dt = 0 in case the planet has reached the inner edge 
                 M_dot[i, dead_by_mig] = 0  # dM/dt = 0 in case the planet has reached the inner edge
-                positions[i, dead_by_mig] = r_magnetic_cavity_gen(times, params)  # set the position to the inner edge
+                positions[i, dead_by_mig] = r_magnetic_cavity(times, params)  # set the position to the inner edge
                             
                 if dead_by_mig:
                     print("Planet "+str(positions[i])[:4]+" reached the inner edge")
                     print("R_planet", positions[i])
-                    print("magentic cavity", r_magnetic_cavity_gen(times, params))
+                    print("magentic cavity", r_magnetic_cavity(times, params))
                 
             #to check if the planets overtake each other
             for j in range(i):
@@ -286,14 +274,14 @@ def evolve_system(
             gas_accretion_dict = None
 
         # The planets should stop at Jupiter mass
-        dead_by_mass = masses[i] > (1*const.M_jup).to(u.g)
+        dead_by_mass = masses[i] > const.M_jup.to(u.M_earth).value
         M_dot[i, dead_by_mass] = 0  
         R_dot[i, dead_by_mass] = 0
 
         flux_on_planet[i] = F0 * flux_reduction
         filter_frac[i] = np.clip(M_dot[i] / flux_on_planet[i], 0, 1)  # filtering fraction due to the planet i is restricted between [0,1]
         filter_frac[i, flux_on_planet[i] == 0] = 0  # when one planet reaches peb iso the definition of ff is 0/0, this prevents the code from crushing
-        dead = (masses[i] > M_peb_iso(positions[i], times, params)) | (positions[i] < r_magnetic_cavity_gen(times, params))  # cut the simulation once it reaches pebble isolaton mass or inner edge
+        dead = (masses[i] > M_peb_iso(positions[i], times, params)) | (positions[i] < r_magnetic_cavity(times, params))  # cut the simulation once it reaches pebble isolaton mass or inner edge
         #filter_frac[i, dead] = 1 # in case the planet reaches peb iso or inner cutoff the ff is 1
         filter_frac[i, dead] = params.iso_filtering # in case the planet reaches peb iso or inner cutoff the ff is 1
         print("params iso filtering", params.iso_filtering)
@@ -303,7 +291,7 @@ def evolve_system(
         if filtering:
             flux_reduction *= (1 - filter_frac[i])  # amount that is multiplied by F0 to get F_i
         
-        print("dust to gas ratio, planet "+str(positions[i].to(u.au))[:4], sigma_peb[i]/sigma_gas[i])
+        print("dust to gas ratio, planet "+str(positions[i])[:4], sigma_peb[i]/sigma_gas[i])
 
     if np.any(np.isnan(filter_frac)):
         print("Nan in ff")
@@ -315,18 +303,18 @@ def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params):
     args = (migration, filtering, peb_acc, gas_acc, params, sim_params)
 
     # creating the arrays that will be updated every timestep by appending the solution, so far they are 1D arrays
-    t_values = np.array([sim_params.t[0].value]) # 1D with the t initial value
-    mass_values = np.array([sim_params.m0.value]) # 1D with the initial mass value
-    pos_values = np.array([sim_params.a_p0.value]) # 1D with the initial position value
-    
+    t_values = np.array([sim_params.t[0]]) # 1D with the t initial value
+    mass_values = np.array([sim_params.m0]) # 1D with the initial mass value
+    pos_values = np.array([sim_params.a_p0]) # 1D with the initial position value
+    print("in simulate euler", pos_values[0])
     # I run the first time the diff eq to have the right first values for the other quantities
     m_dot, r_dot, filter_f, flux_p, flux , flux_ratio, R_acc, H_peb, R_acc_H, R_acc_B, Mdot_twoD_B, Mdot_twoD_H, Mdot_threeD_B, Mdot_threeD_H, Mdot_threeD_unif, Sigma_peb, Sigma_gas, HR, acc_regimes, gas_acc_dict = evolve_system(t_values[0], mass_values[0], pos_values[0], *args)
-    
+    print("after the dm in simulate euler", m_dot)
     Mdot_values = np.array([m_dot]) # 1D (nr_planets) with values of 0 
     Rdot_values = np.array([r_dot])# 1D (nr_planets) with values of 0 
     filter_values = np.array([filter_f]) # 1D (nr_planets) with values of 0 
     planet_flux_values = np.array([flux_p]) # 1D (nr_planets) with values of 0 
-    F0_values = np.array([flux.value]) # 1D (nr_planets) with values of flux (t, pos[0])
+    F0_values = np.array([flux]) # 1D (nr_planets) with values of flux (t, pos[0])
     flux_ratio_values = np.array([flux_ratio]) # 1D (nr_planets) with values of flux (t, pos[0])
 
     # debug quantities
@@ -386,12 +374,12 @@ def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params):
         sigma_gas = np.append(sigma_gas, [sigmagas], axis=0)
         H_r = np.append(H_r, [Hr], axis=0)
 
-    simulation = SimulationResults(t_values, mass_values.T, pos_values.T, Mdot_values.T, Rdot_values.T, filter_values.T, 
-                                   planet_flux_values.T, F0_values.T, flux_ratio_values.T, r_acc.T, h_peb.T, r_acc_h.T, 
-                                   r_acc_b.T, mdot_twod_bondi.T,mdot_twod_hill.T, mdot_threed_bondi.T, mdot_threed_hill.T, 
-                                   mdot_threed_unif.T, sigma_peb.T, sigma_gas.T, H_r.T, acc_regimes, gas_acc_dict)
+    simulation = SimulationResults(t_values*u.Myr, mass_values.T*u.M_earth, pos_values.T*u.au, Mdot_values.T*u.M_earth/u.Myr, Rdot_values.T*u.au/u.Myr, filter_values.T, 
+                                   planet_flux_values.T*u.M_earth/u.Myr, F0_values.T*u.M_earth/u.Myr, flux_ratio_values.T, r_acc.T*u.au, h_peb.T, r_acc_h.T*u.au, 
+                                   r_acc_b.T*u.au, mdot_twod_bondi.T*u.M_earth/u.Myr, mdot_twod_hill.T*u.M_earth/u.Myr, mdot_threed_bondi.T*u.M_earth/u.Myr, mdot_threed_hill.T*u.M_earth/u.Myr, 
+                                   mdot_threed_unif.T*u.M_earth/u.Myr, sigma_peb.T*u.M_earth/u.au**2, sigma_gas.T*u.M_earth/u.au**2, H_r.T, acc_regimes, gas_acc_dict)
     # Write the result to a JSON file
-    with open('sims/gas_acc/sim_'+str(sim_params.nr_planets)+'planets_'+str(params.H_r_model)+'_'+str(params.epsilon_el)+'e_el_'+str((params.v_frag).to(u.m/u.s).value)+'_t'+str(sim_params.N_step)+'.json', 'w') as file:
+    with open('sims/gas_acc/sim_'+str(sim_params.nr_planets)+'planets_'+str(params.H_r_model)+'_'+str(params.epsilon_el)+'e_el_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_t'+str(sim_params.N_step)+'.json', 'w') as file:
         json.dump(simulation.__dict__, file, cls=SimulationEncoder)
 
     return simulation

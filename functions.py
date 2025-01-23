@@ -9,11 +9,13 @@ from matplotlib import cm
 # times -> Myr
 # lengths -> au
 G = (const.G.cgs.to(u.au**3 / (u.M_earth * u.Myr**2))).value #approx 1e8
-M_sun = (const.M_sun.to(u.M_earth)).value
+M_sun_M_E = (const.M_sun.to(u.M_earth)).value
+L_sun_au_M_E_Myr = (const.L_sun.cgs).to(u.au**2*u.M_earth/u.Myr**3).value
 M_sun_yr_to_M_E_Myr = (1*u.M_sun/u.yr).to(u.M_earth/u.Myr).value #approx 3e12
 m_s_to_au_Myr = (1*u.m/u.s).to(u.au/u.Myr).value #approx 210
 yr_to_Myr = (1*u.yr).to(u.Myr).value
 g_cm_to_M_E_au = (1*u.g/u.cm**2).to(u.M_earth/u.au**2).value
+mm_to_au = (1*u.mm).to(u.au).value
 
 @u.quantity_input
 
@@ -39,7 +41,7 @@ def R_H(position, mass, params):
 
 def R_B(mass, v):
     """Bondi radius"""
-    return 2*const.G.cgs*mass/(v**2)
+    return 2*G*mass/(v**2)
 
 def b_H(position, mass, St, params):
     """Impact parameter (aka accretion radius) in Hill regime, according to my calculations of Ormel chapter"""
@@ -47,6 +49,8 @@ def b_H(position, mass, St, params):
 
 def b_B(position, mass, v, St, params):
     """Impact paramter (aka accretion radius) in Bondi regime"""
+    print("Bondi radius", np.sqrt(v*St/omega_k(position, params)*R_B(mass, v)))
+    print("R_B", R_B(mass, v))
     return np.sqrt(v*St/omega_k(position, params)*R_B(mass, v))
 
 def eta(position, t, params):
@@ -81,13 +85,13 @@ def r_magnetic_cavity(t, params):
 # The iceline are computed where T_midplane = 170 K, based on the 
 def iceline_irr(t, T, params):
     """Exact calculation using (H/R)_irr = c_s/v_K, with (H/R)_irr from Ida et al.2016"""
-    c = 0.024*(params.star_luminosity)**(1/7)*(params.star_mass)**(-4/7)
+    c = 0.024*(params.star_luminosity/L_sun_au_M_E_Myr)**(1/7)*(params.star_mass/M_sun_M_E)**(-4/7)
     c_s_ice = c_s(T, params) #water iceline is defined where T=170K
     return (c/c_s_ice*np.sqrt(G*params.star_mass))**(14/3)
 
 def iceline_visc(t, T, params):
     """Exact calculation using (H/R)_visc = c_s/v_K, with (H/R)_visc from pebble notes"""
-    c = 0.024*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/(0.1*u.mm).to(u.cm))**(-1/10)*(params.rho_gr/(1*u.g/u.cm**3))**(-1/10)*(M_dot_star(t, params)/(1e-8*const.M_sun.cgs/((1*u.yr).to(u.s))))**(1/5)
+    c = 0.024*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/0.1*mm_to_au)**(-1/10)*(params.rho_gr/g_cm_to_M_E_au)**(-1/10)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)
     c_s_ice = c_s(T, params) # water iceline is defined where T=170K
     return (c/c_s_ice*np.sqrt(const.G.cgs*params.star_mass))**(20/9)
 
@@ -108,7 +112,6 @@ def st_drift_epstein(position, t, params):
     """Drift limit using t_g = t_drift for a Sigma_peb = F/(2 pi r v_r), F St independent, using St^2+1 = 1"""
     # N.B.: this is in epstein regime
     sigma_gas = sigma_gas_steady_state(position, t, params)
-
     F = params.Z*M_dot_star(t, params)
 
     return np.sqrt((np.sqrt(3)*params.epsilon_p*F)/(32*np.pi*sigma_gas*position*eta(position, t, params)**2*v_k(position, params)))
@@ -118,9 +121,14 @@ def st_drift_stokes(position, t,  params):
     lambda_mfp = mfp(position, t, sigma_gas_steady_state(position, t, params), params)
     rho_gas = rho_0(position, t, sigma_gas_steady_state(position, t, params), params)
     sigma_gas = sigma_gas_steady_state(position, t, params)
+    print("lambda_mfp",lambda_mfp)
+    print("rho_gas",rho_gas)
+    print("sigma_gas",sigma_gas)
     H = H_R(position, t, params)*position
-
     F = params.Z*M_dot_star(t, params)
+    print("F",F)
+    print("h/r",H_R(position, t, params)*position)
+    print("drift",(48*np.pi/np.sqrt(3)*sigma_gas/F*(rho_gas*H/params.rho_gr)**(-1/2)*np.sqrt(lambda_mfp)/(params.epsilon_p*omega_k(position, params))*eta(position, t, params)**2*v_k(position, params)**2)**(-2/3))
     return (48*np.pi/np.sqrt(3)*sigma_gas/F*(rho_gas*H/params.rho_gr)**(-1/2)*np.sqrt(lambda_mfp)/(params.epsilon_p*omega_k(position, params))*eta(position, t, params)**2*v_k(position, params)**2)**(-2/3)
 
 ##### WARNING: I REALLY DON'T THINK THIS IS NECESSARY TRUE
@@ -130,6 +138,7 @@ def st_drift(position, t,  params):
 
 def st_frag(position, t, params):
     """ fragmentation limited stokes number, according to original equation"""
+    print("frag",1/3*(params.alpha_frag)**(-1)*(params.v_frag)**2*(H_R(position, t, params))**(-2)*v_k(position, params)**(-2))
     return 1/3*(params.alpha_frag)**(-1)*(params.v_frag)**2*(H_R(position, t, params))**(-2)*v_k(position, params)**(-2)
 
 def st_frag_drift(position, t, params):
@@ -151,7 +160,7 @@ def rho_0 (position, t, sigma_gas, params):
 
 def mfp (position, t, sigma_gas, params):
     """Mean free path of the gas"""
-    return (params.mu*const.m_p.cgs)/(params.cross_sec_H*rho_0(position, t, sigma_gas, params))
+    return (params.mu*const.m_p.cgs.value/params.cross_sec_H.value)*g_cm_to_M_E_au/rho_0(position, t, sigma_gas, params)
 
 def st_from_r_peb(r_peb, position, t, params):
     """relation between stokes number and pebble dimension, both regimes"""
@@ -197,21 +206,24 @@ def M_dot_star(t, params):
 def sigma_gas_irr(position, t, params):
     """Sigma gas for an irradiated disc, equation (13) from Ida et al. 2016"""
 
-    return 2.7*1e3*(params.star_mass)**(9/14)*(params.star_luminosity)**(-2/7)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))*(params.alpha/1e-3)**(-1)*(position)**(-15/14)
+    return 2.7*1e3*(params.star_mass/M_sun_M_E)**(9/14)*(params.star_luminosity/L_sun_au_M_E_Myr)**(-2/7)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))*(params.alpha/1e-3)**(-1)*(position)**(-15/14)
 
 def sigma_gas_visc_Ida(position, t, params):
     """Sigma gas for a viscous disc, equation (12) from Ida et al. 2016"""
 
-    return 2.1*1e3*(params.star_mass)**(1/5)*(params.alpha/1e-3)**(-4/5)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(3/5)*(position)**(-3/5)
+    return 2.1*1e3*(params.star_mass/M_sun_M_E)**(1/5)*(params.alpha/1e-3)**(-4/5)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(3/5)*(position)**(-3/5)
 
 def sigma_gas_visc_Liu(position, t, params):
     """Sigma gas for viscous disc from Liut et al. 2019, equation (8)"""
 
-    return 132*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/2)*(params.star_mass)**(1/8)*(params.alpha/1e-2)**(-3/4)*(params.disc_opacity/1e-2)**(-1/4)*(position)**(-3/8)
+    return 132*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/2)*(params.star_mass/M_sun_M_E)**(1/8)*(params.alpha/1e-2)**(-3/4)*(params.disc_opacity/1e-2)**(-1/4)*(position)**(-3/8)
 
 def sigma_gas_steady_state(position, t, params):
     """Gas surface density for a steady state viscously evolving disc, equation (11) in Ida et al. 2016"""
-
+    print(M_dot_star(t, params))
+    print(omega_k(position, params))
+    print(H_R(position, t, params)**2)
+    print(position)
     return M_dot_star(t, params)/(3*np.pi*params.alpha*H_R(position, t, params)**2*position**2*omega_k(position, params))
 
 ###### PEBBLE SURFACE DENSITIES ############
@@ -323,20 +335,20 @@ def sigma_from_flux(position, flux, sigma_gas, params):
 ########## SCALE HEIGHTS #############
 def H_R_irr(position, params):
     """Irradiated disc prescription equation (10) in Ida et al. 16"""
-    return 0.024*(params.star_luminosity)**(1/7)*(params.star_mass)**(-4/7)*(position)**(2/7)
+    return 0.024*(params.star_luminosity/L_sun_au_M_E_Myr)**(1/7)*(params.star_mass/M_sun_M_E)**(-4/7)*(position)**(2/7)
 
 def H_R_visc_Ida(position, t, params):
     """Viscous disc prescription equation (9) in Ida et al. 16"""
 
-    return 0.027*(params.star_mass)**(-7/20)*(params.alpha/1e-3)**(-1/10)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)*(position)**(1/20)
+    return 0.027*(params.star_mass/M_sun_M_E)**(-7/20)*(params.alpha/1e-3)**(-1/10)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)*(position)**(1/20)
 
 def H_R_visc_Liu(position, t, params):
     """Viscous H/r from equation (10) in Liu et al. 2019"""
-    return 0.034*(params.star_mass)**(-5/16)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/4)*(params.alpha/1e-2)**(-1/8)*(position)**(-1/16)*(params.disc_opacity/1e-2)**(1/8)
+    return 0.034*(params.star_mass/M_sun_M_E)**(-5/16)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/4)*(params.alpha/1e-2)**(-1/8)*(position)**(-1/16)*(params.disc_opacity/1e-2)**(1/8)
 
 def H_R_visc_Lambrechts(position, t, params):
     """Viscous H/r from equation (A47) in Lambrechts notes"""
-    return 0.019*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/(0.1*u.mm).to(u.cm))**(-1/10)*(params.rho_gr/(1*u.g/u.cm**3))**(-1/10)*(position)**(1/20)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)*(params.star_mass)**(-7/20)
+    return 0.019*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/0.1*mm_to_au)**(-1/10)*(params.rho_gr/g_cm_to_M_E_au)**(-1/10)*(position)**(1/20)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)*(params.star_mass/M_sun_M_E)**(-7/20)
 
 def H_R_flared(position, params):
     """Flared disc Bitsch et al. 2015"""

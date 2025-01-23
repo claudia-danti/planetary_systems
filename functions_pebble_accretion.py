@@ -8,20 +8,24 @@ from functions import *
 # masses -> earth masses
 # times -> Myr
 # lengths -> au
-
+m_kg_to_au_M_E = (1*u.m**2/u.kg).to(u.au**2/u.M_earth).value
 
 ## PEBBLE ACCRETION FUNCTIONS ###
 def M_dot_ThreeD_unif(position, t, mass, sigma_peb, St, params):
     """Three D accretion for both regimes using t_enc = t_sett, according to Ormel chapter"""
     test = 6*np.pi*R_H(position, mass, params)**3*St*omega_k(position, params)*sigma_peb/(np.sqrt(2*np.pi)*H_peb(St, position, t, params))
+    print("3d unif", test)
     return test
      
 def M_dot_ThreeD(position, t, R_acc, sigma_peb, v_acc, St, params):
     #Three D accretion according to (A.7) of LM19
+    print("mdot three D ", np.pi*R_acc**2*v_acc*sigma_peb/(np.sqrt(2*np.pi)*H_peb(St, position,t, params)))
     return np.pi*R_acc**2*v_acc*sigma_peb/(np.sqrt(2*np.pi)*H_peb(St, position,t, params))
 
 def M_dot_TwoD(R_acc, sigma_peb, v_acc):
     #Two D accretion according to (A.7) of LM19
+    print("mdot two D ", 2*R_acc*v_acc*sigma_peb)
+
     return 2*R_acc*v_acc*sigma_peb
 
 def check_threeD_twoD(position, t, mass, params):
@@ -63,13 +67,13 @@ class PebbleAccretion:
             if self.simplified_acc:
                 self.acc_regime_dict[planet_id] = {
                     "masses": {
-                        "3D accretion": 0*u.g,
-                        "2D Hill accretion": 0*u.g,
+                        "3D accretion": 0,
+                        "2D Hill accretion": 0,
 
                     },
                     "times": {
-                        "3D accretion": 0*u.s,
-                        "2D Hill accretion": 0*u.s,
+                        "3D accretion": 0,
+                        "2D Hill accretion": 0,
 
                     },
 
@@ -79,16 +83,16 @@ class PebbleAccretion:
             else:
                 self.acc_regime_dict[planet_id] = {
                     "masses": {
-                        "3D accretion": 0*u.g,
-                        "Bondi accretion": 0*u.g,
-                        "2D accretion": 0*u.g,
-                        "Hill accretion": 0*u.g
+                        "3D accretion": 0,
+                        "Bondi accretion": 0,
+                        "2D accretion": 0,
+                        "Hill accretion": 0
                     },
                     "times": {
-                        "3D accretion": 0*u.s,
-                        "Bondi accretion": 0*u.s,
-                        "2D accretion": 0*u.s,
-                        "Hill accretion": 0*u.s
+                        "3D accretion": 0,
+                        "Bondi accretion": 0,
+                        "2D accretion": 0,
+                        "Hill accretion": 0
                     },
                     
                     "printed_2D": False,
@@ -113,14 +117,14 @@ class PebbleAccretion:
                         if (is_2D_case and not acc_reg["printed_2D"]) or (not is_2D_case and not acc_reg["printed_3D"]):
                             if is_2D_case:
                                 print("Planet "+str(self.planet_id)+" in 2D Hill accretion")
-                                acc_reg["times"]["2D Hill accretion"] = t.to(u.Myr)
-                                acc_reg["masses"]["2D Hill accretion"] = m.to(u.earthMass)
+                                acc_reg["times"]["2D Hill accretion"] = t
+                                acc_reg["masses"]["2D Hill accretion"] = m
                                 acc_reg["printed_2D"] = True
 
                             else:
                                 print("Planet "+str(self.planet_id)+" in 3D accretion")
-                                acc_reg["times"]["3D accretion"] = t.to(u.Myr)
-                                acc_reg["masses"]["3D accretion"] = m.to(u.earthMass)
+                                acc_reg["times"]["3D accretion"] = t
+                                acc_reg["masses"]["3D accretion"] = m
                                 acc_reg["printed_3D"] = True
         #the case of all accretion regimes
         else:
@@ -130,13 +134,13 @@ class PebbleAccretion:
                         if (is_Hill_case and not acc_reg["printed_Hill"]) or (not is_Hill_case and not  acc_reg["printed_Bondi"]):
                             if is_Hill_case:
                                 print("Planet "+str(self.planet_id)+" in Hill accretion")
-                                acc_reg["times"]["Hill accretion"] = t.to(u.Myr)
-                                acc_reg["masses"]["Hill accretion"] = m.to(u.earthMass)
+                                acc_reg["times"]["Hill accretion"] = t
+                                acc_reg["masses"]["Hill accretion"] = m
                                 acc_reg["printed_Hill"] = True
                             else:
                                 print("Planet "+str(self.planet_id)+" in Bondi accretion")
-                                acc_reg["times"]["Bondi accretion"] = t.to(u.Myr)
-                                acc_reg["masses"]["Bondi accretion"] = m.to(u.earthMass)
+                                acc_reg["times"]["Bondi accretion"] = t
+                                acc_reg["masses"]["Bondi accretion"] = m
                                 acc_reg["printed_Bondi"] = True
 
                 for sub_key in ["2D accretion", "3D accretion"]:
@@ -144,13 +148,13 @@ class PebbleAccretion:
                         if (is_2D_case and not acc_reg["printed_2D"]) or (not is_2D_case and not acc_reg["printed_3D"]):
                             if is_2D_case:
                                 print("Planet "+str(self.planet_id)+" in 2D accretion")
-                                acc_reg["times"]["2D accretion"] = t.to(u.Myr)
-                                acc_reg["masses"]["2D accretion"] = m.to(u.earthMass)
+                                acc_reg["times"]["2D accretion"] = t
+                                acc_reg["masses"]["2D accretion"] = m
                                 acc_reg["printed_2D"] = True
                             else:
                                 print("Planet "+str(self.planet_id)+" in 3D accretion")
-                                acc_reg["times"]["3D accretion"] = t.to(u.Myr)
-                                acc_reg["masses"]["3D accretion"] = m.to(u.earthMass)
+                                acc_reg["times"]["3D accretion"] = t
+                                acc_reg["masses"]["3D accretion"] = m
                                 acc_reg["printed_3D"] = True
                 
     
@@ -190,8 +194,9 @@ class PebbleAccretion:
                 v_acc = v_hw(position, t, params)
                 R_acc = b_B(position, M_core, v_acc, St, params)
                 R_acc_B = b_B(position, M_core, v_acc, St, params)
-                R_acc_H = 0*u.cm
+                R_acc_H = 0
                 is_Hill_case = False
+                print("in Bondi regime", v_acc, R_acc, R_acc_B, R_acc_H)
                 is_2d_case = False
                 #self.flagging(is_2d_case, is_Hill_case, t, M_core)
                 #print("we are in Bondi regime", M_core/M_Bondi_Hill_trans(position, delta_v, params))
@@ -200,9 +205,11 @@ class PebbleAccretion:
                 #Hill regime
                 v_acc = 3/2*omega_k(position, params)*b_H(position, M_core, St, params)
                 R_acc = b_H(position, M_core, St, params)     
-                R_acc_B = 0*u.cm
+                R_acc_B = 0
                 R_acc_H = b_H(position, M_core, St, params)
                 is_Hill_case = True
+                print("in Hill regime", v_acc, R_acc, R_acc_B, R_acc_H)
+
                 is_2d_case = False
                 #self.flagging(is_2d_case, is_Hill_case, t, M_core)
                 #print("We are in Hill regime", M_core/M_Bondi_Hill_trans(position, delta_v, params))
@@ -214,6 +221,8 @@ class PebbleAccretion:
                 dMc_dt = M_dot_ThreeD_unif(position, t, M_core, sigma_peb, St, params)
                 #dMc_dt = M_dot_ThreeD(position, R_acc, sigma_peb_filtered, v_acc, stokes_peb, params)
                 is_Hill_case = False
+                print("in 3D regime", dMc_dt)
+
                 is_2d_case = False
                 #self.flagging(is_2d_case,is_Hill_case, t, M_core)
 
@@ -221,6 +230,7 @@ class PebbleAccretion:
                 #2D accretion
                 dMc_dt = M_dot_TwoD(R_acc, sigma_peb, v_acc)
                 is_Hill_case = False
+                print("in 2D regime", dMc_dt)
                 is_2d_case = True
                 #self.flagging(is_2d_case,is_Hill_case, t, M_core)
 
@@ -240,16 +250,10 @@ class PebbleAccretion:
         
         if params.St_const is None:
             stokes_peb = st_frag_drift(position, t, params)
-            #stokes_peb = st_frag(position, t, params).value
-            #stokes_peb = st_drift(position, sigma_peb_filtered, sigma_gas_val, params)
         else: 
             stokes_peb = params.St_const
 
-        if params.H_r_model != 'flat':
-            sigma_gas = sigma_gas_steady_state(position, t, params)
-        else:
-            sigma_gas = sigma_gas_t(position, t, params)
-
+        sigma_gas = sigma_gas_steady_state(position, t, params)
 
         #stokes_peb = np.where(position < params.iceline_radius, 1/2, 1)*stokes_peb # to reduce the stokes number at the iceline
         # filtered amount of pebbles to be accreted
@@ -257,12 +261,14 @@ class PebbleAccretion:
 
         dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r, acc_reg_dict  =  self.compute_accretion_regime(t, position, M_core, stokes_peb, sigma_peb_filtered, sigma_gas, params)
         
+        print("in dMc_dt", dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r)
+
         return dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r, acc_reg_dict
 
 ################## GAS ACCRETION FUNCTIONS ####################
 def M_dot_gas_KH( M_core, params):
     """Kevin-Helmholtz envelope contraction from equation (52) in Nerea's paper"""
-    return 10**(-5)*(M_core/10)**4*(params.kappa/(0.1*u.m**2/u.kg).to(u.au**2/u.M_earth))**(-1)
+    return 10**(-5)*(M_core/10)**4*(params.kappa/0.1*m_kg_to_au_M_E)**(-1)
 
 def M_dot_gas_runaway(position, M_core, t, sigma_gas, params):
     """Runaway gas accretion from equation (53) in Nerea's paper"""
@@ -288,15 +294,15 @@ class GasAccretion:
             # we create two different dictionaries depending whether we use the accretion 3D/2D Hill or full cases
             self.gas_accretion_dict[planet_id] = {
                 "masses": {
-                    "KH envelope contraction": 0*u.g,
-                    "runaway gas accretion": 0*u.g,
-                    "disc gas accretion": 0*u.g,
+                    "KH envelope contraction": 0,
+                    "runaway gas accretion": 0,
+                    "disc gas accretion": 0,
 
                 },
                 "times": {
-                    "KH envelope contraction": 0*u.s,
-                    "runaway gas accretion": 0*u.s,
-                    'disc gas accretion': 0*u.s,
+                    "KH envelope contraction": 0,
+                    "runaway gas accretion": 0,
+                    'disc gas accretion': 0,
 
                 },
 
@@ -316,19 +322,19 @@ class GasAccretion:
                     if (is_KH_case and not gas_acc["printed_KH"]) or (not is_KH_case and not gas_acc["printed_runaway"])or (not is_KH_case and not gas_acc["printed_gas"]):
                         if is_KH_case:
                             print("Planet "+str(self.planet_id)+" in KH envelope contraction")
-                            gas_acc["times"]["KH envelope contraction"] = t.to(u.Myr)
-                            gas_acc["masses"]["KH envelope contraction"] = m.to(u.earthMass)
+                            gas_acc["times"]["KH envelope contraction"] = t
+                            gas_acc["masses"]["KH envelope contraction"] = m
                             gas_acc["printed_KH"] = True
 
                         elif is_runaway_case:
                             print("Planet "+str(self.planet_id)+" in runaway gas accretion")
-                            gas_acc["times"]["runaway gas accretion"] = t.to(u.Myr)
-                            gas_acc["masses"]["runaway gas accretion"] = m.to(u.earthMass)
+                            gas_acc["times"]["runaway gas accretion"] = t
+                            gas_acc["masses"]["runaway gas accretion"] = m
                             gas_acc["printed_runaway"] = True
                         else:
                             print("Planet "+str(self.planet_id)+" in disc gas accretion")
-                            gas_acc["times"]["disc gas accretion"] = t.to(u.Myr)
-                            gas_acc["masses"]["disc gas accretion"] = m.to(u.earthMass)
+                            gas_acc["times"]["disc gas accretion"] = t
+                            gas_acc["masses"]["disc gas accretion"] = m
                             gas_acc["printed_gas"] = True
 
     def dMc_dt_gas(self, t, M_core, position, params, sim_params):
@@ -386,7 +392,7 @@ def dR_dt_both(t, position, M_core, sigma_g, params):
     dr_dt_typeI = -c*M_core/(params.star_mass**2)*sigma_g*position**2*H_R(position, t, params)**(-2)*v_k(position, params)
     dr_dt_typeII = dr_dt_typeI*sigma_gap_sigma_gas(position, M_core, t, params)
 
-    if np.any(M_core.value) < np.any(2.3*M_peb_iso(position, t, params).value):
+    if np.any(M_core) < np.any(2.3*M_peb_iso(position, t, params)):
         return dr_dt_typeI
     else:
         return dr_dt_typeII
