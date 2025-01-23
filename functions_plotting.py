@@ -24,7 +24,7 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
     isolation_mass = M_peb_iso(position.value, time.value, params)
     stop_idx = np.argmin(position) #returns the position of the min value of position
     stop_mass_idx = np.any(np.where(dM_dt == 0)[0][0]) if np.any(np.where(dM_dt == 0)[0]) else dM_dt.size
-
+    print("m_iso", M_peb_iso(position.value, time.value, params))
     isolation_idx = np.where(mass.value > isolation_mass)[0]
     if isolation_idx.size > 0:
         isolation_idx = isolation_idx[0]
@@ -258,7 +258,6 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
         stop_mass_idx = idx_df['stop_mass_idx'].values[0]
         pos = np.geomspace(1e-2,200, num=sim_params.N_step+1)
         norm=mpl.colors.LogNorm(vmin = (1e5*u.yr).to(u.Myr).value, vmax = (3e6*u.yr).to(u.Myr).value)
-        print(sim.time)
         print('planet '+str(sim_params.a_p0[p]*(u.au))+" iso mass at ", sim.time[isolation_idx].to(u.Myr) if isolation_idx < sim.mass[p].size else "no iso, end of sim")
         #print('inner', inner_edge_idx)
         #plot the growth track with color coding gven by the time it takes to grow

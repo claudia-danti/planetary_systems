@@ -14,7 +14,8 @@ L_sun_au_M_E_Myr = (const.L_sun.cgs).to(u.au**2*u.M_earth/u.Myr**3).value
 M_sun_yr_to_M_E_Myr = (1*u.M_sun/u.yr).to(u.M_earth/u.Myr).value #approx 3e12
 m_s_to_au_Myr = (1*u.m/u.s).to(u.au/u.Myr).value #approx 210
 yr_to_Myr = (1*u.yr).to(u.Myr).value
-g_cm_to_M_E_au = (1*u.g/u.cm**2).to(u.M_earth/u.au**2).value
+g_cm2_to_M_E_au2 = (1*u.g/u.cm**2).to(u.M_earth/u.au**2).value
+g_cm3_to_M_E_au3 = (1*u.g/u.cm**3).to(u.M_earth/u.au**3).value
 mm_to_au = (1*u.mm).to(u.au).value
 
 @u.quantity_input
@@ -91,7 +92,7 @@ def iceline_irr(t, T, params):
 
 def iceline_visc(t, T, params):
     """Exact calculation using (H/R)_visc = c_s/v_K, with (H/R)_visc from pebble notes"""
-    c = 0.024*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/0.1*mm_to_au)**(-1/10)*(params.rho_gr/g_cm_to_M_E_au)**(-1/10)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)
+    c = 0.024*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/(0.1*mm_to_au))**(-1/10)*(params.rho_gr/g_cm3_to_M_E_au3)**(-1/10)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)
     c_s_ice = c_s(T, params) # water iceline is defined where T=170K
     return (c/c_s_ice*np.sqrt(const.G.cgs*params.star_mass))**(20/9)
 
@@ -160,7 +161,7 @@ def rho_0 (position, t, sigma_gas, params):
 
 def mfp (position, t, sigma_gas, params):
     """Mean free path of the gas"""
-    return (params.mu*const.m_p.cgs.value/params.cross_sec_H.value)*g_cm_to_M_E_au/rho_0(position, t, sigma_gas, params)
+    return (params.mu*const.m_p.cgs.value/params.cross_sec_H.value)*g_cm2_to_M_E_au2/rho_0(position, t, sigma_gas, params)
 
 def st_from_r_peb(r_peb, position, t, params):
     """relation between stokes number and pebble dimension, both regimes"""
@@ -348,7 +349,7 @@ def H_R_visc_Liu(position, t, params):
 
 def H_R_visc_Lambrechts(position, t, params):
     """Viscous H/r from equation (A47) in Lambrechts notes"""
-    return 0.019*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/0.1*mm_to_au)**(-1/10)*(params.rho_gr/g_cm_to_M_E_au)**(-1/10)*(position)**(1/20)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)*(params.star_mass/M_sun_M_E)**(-7/20)
+    return 0.019*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/(0.1*mm_to_au))**(-1/10)*(params.rho_gr/g_cm3_to_M_E_au3)**(-1/10)*(position)**(1/20)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)*(params.star_mass/M_sun_M_E)**(-7/20)
 
 def H_R_flared(position, params):
     """Flared disc Bitsch et al. 2015"""
@@ -391,7 +392,7 @@ def H_peb(St, position, t, params):
 ## maybe needs an update with the Bitsch one!
 def M_peb_iso(position, t, params):
     """pebble isolation mass according to annual review equations"""
-    return 20 * (H_R(position, t, params) / 0.05)**3 *(params.star_mass)
+    return 20 * (H_R(position, t, params) / 0.05)**3 *(params.star_mass/M_sun_M_E)
 
 def M_peb_iso_Bitsch(position, t, params):
     """Pebble isolation mass from Bitsch et al. 2018"""
@@ -442,7 +443,7 @@ def M0_pla(position, t, sigma_gas, params):
     """Initial planetesimal mass scaling, according to Liu et al. 2020"""
     f = 400
     f_value = f/400
-    return 2e-4*f_value*(H_R(position, t, params)/0.04)**(3/2)*(sigma_gas/(1700*g_cm_to_M_E_au))**(3/2)*(position)**3
+    return 2e-4*f_value*(H_R(position, t, params)/0.04)**(3/2)*(sigma_gas/(1700*g_cm2_to_M_E_au2))**(3/2)*(position)**3
 
 def pebble_prod_line(time, params):
     """pebble production line according to eq 10 of LJ14"""
