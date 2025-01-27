@@ -9,23 +9,21 @@ from functions import *
 # times -> Myr
 # lengths -> au
 m_kg_to_au_M_E = (1*u.m**2/u.kg).to(u.au**2/u.M_earth).value
+M_E_yr_to_M_E_Myr = (1*u.M_earth/u.yr).to(u.M_earth/u.Myr).value
+M_sun_M_E = (const.M_sun.to(u.M_earth)).value
 
 ## PEBBLE ACCRETION FUNCTIONS ###
 def M_dot_ThreeD_unif(position, t, mass, sigma_peb, St, params):
     """Three D accretion for both regimes using t_enc = t_sett, according to Ormel chapter"""
     test = 6*np.pi*R_H(position, mass, params)**3*St*omega_k(position, params)*sigma_peb/(np.sqrt(2*np.pi)*H_peb(St, position, t, params))
-    print("3d unif", test)
     return test
      
 def M_dot_ThreeD(position, t, R_acc, sigma_peb, v_acc, St, params):
     #Three D accretion according to (A.7) of LM19
-    print("mdot three D ", np.pi*R_acc**2*v_acc*sigma_peb/(np.sqrt(2*np.pi)*H_peb(St, position,t, params)))
     return np.pi*R_acc**2*v_acc*sigma_peb/(np.sqrt(2*np.pi)*H_peb(St, position,t, params))
 
 def M_dot_TwoD(R_acc, sigma_peb, v_acc):
     #Two D accretion according to (A.7) of LM19
-    print("mdot two D ", 2*R_acc*v_acc*sigma_peb)
-
     return 2*R_acc*v_acc*sigma_peb
 
 def check_threeD_twoD(position, t, mass, params):
@@ -196,7 +194,6 @@ class PebbleAccretion:
                 R_acc_B = b_B(position, M_core, v_acc, St, params)
                 R_acc_H = 0
                 is_Hill_case = False
-                print("in Bondi regime", v_acc, R_acc, R_acc_B, R_acc_H)
                 is_2d_case = False
                 #self.flagging(is_2d_case, is_Hill_case, t, M_core)
                 #print("we are in Bondi regime", M_core/M_Bondi_Hill_trans(position, delta_v, params))
@@ -208,8 +205,6 @@ class PebbleAccretion:
                 R_acc_B = 0
                 R_acc_H = b_H(position, M_core, St, params)
                 is_Hill_case = True
-                print("in Hill regime", v_acc, R_acc, R_acc_B, R_acc_H)
-
                 is_2d_case = False
                 #self.flagging(is_2d_case, is_Hill_case, t, M_core)
                 #print("We are in Hill regime", M_core/M_Bondi_Hill_trans(position, delta_v, params))
@@ -221,8 +216,6 @@ class PebbleAccretion:
                 dMc_dt = M_dot_ThreeD_unif(position, t, M_core, sigma_peb, St, params)
                 #dMc_dt = M_dot_ThreeD(position, R_acc, sigma_peb_filtered, v_acc, stokes_peb, params)
                 is_Hill_case = False
-                print("in 3D regime", dMc_dt)
-
                 is_2d_case = False
                 #self.flagging(is_2d_case,is_Hill_case, t, M_core)
 
@@ -230,7 +223,6 @@ class PebbleAccretion:
                 #2D accretion
                 dMc_dt = M_dot_TwoD(R_acc, sigma_peb, v_acc)
                 is_Hill_case = False
-                print("in 2D regime", dMc_dt)
                 is_2d_case = True
                 #self.flagging(is_2d_case,is_Hill_case, t, M_core)
 
@@ -261,18 +253,16 @@ class PebbleAccretion:
 
         dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r, acc_reg_dict  =  self.compute_accretion_regime(t, position, M_core, stokes_peb, sigma_peb_filtered, sigma_gas, params)
         
-        print("in dMc_dt", dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r)
-
         return dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r, acc_reg_dict
 
 ################## GAS ACCRETION FUNCTIONS ####################
 def M_dot_gas_KH( M_core, params):
     """Kevin-Helmholtz envelope contraction from equation (52) in Nerea's paper"""
-    return 10**(-5)*(M_core/10)**4*(params.kappa/0.1*m_kg_to_au_M_E)**(-1)
+    return 10**(-5)*(M_core/10)**4*(params.kappa/(0.1*m_kg_to_au_M_E))**(-1)*M_E_yr_to_M_E_Myr
 
 def M_dot_gas_runaway(position, M_core, t, sigma_gas, params):
     """Runaway gas accretion from equation (53) in Nerea's paper"""
-    return 0.29*H_R(position, t, params)**(-2)*(M_core/params.star_mass)**(4/3)*sigma_gas*position**2*omega_k(position, params)*sigma_gap_sigma_gas(position, M_core,t,params)
+    return 0.29*H_R(position, t, params)**(-2)*(M_core/(params.star_mass))**(4/3)*sigma_gas*position**2*omega_k(position, params)*sigma_gap_sigma_gas(position, M_core,t,params)
 
 
 class GasAccretion:

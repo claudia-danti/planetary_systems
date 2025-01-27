@@ -257,7 +257,7 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
         stop_mig_idx = idx_df['stop_mig_idx'].values[0]
         stop_mass_idx = idx_df['stop_mass_idx'].values[0]
         pos = np.geomspace(1e-2,200, num=sim_params.N_step+1)
-        norm=mpl.colors.LogNorm(vmin = (1e5*u.yr).to(u.Myr).value, vmax = (3e6*u.yr).to(u.Myr).value)
+        norm=mpl.colors.LogNorm(vmin = 0.1, vmax = 10)
         print('planet '+str(sim_params.a_p0[p]*(u.au))+" iso mass at ", sim.time[isolation_idx].to(u.Myr) if isolation_idx < sim.mass[p].size else "no iso, end of sim")
         #print('inner', inner_edge_idx)
         #plot the growth track with color coding gven by the time it takes to grow
@@ -292,8 +292,6 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
         #fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.95, 0.15, 0.03, 0.7])
         cbar = fig.colorbar(sc, cax=cbar_ax)	
-
-
         # Manually set the colorbar boundaries and ticks
         cbar_ax.yaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 5.0]))
         cbar_ax.yaxis.set_major_formatter(LogFormatter())
@@ -323,7 +321,7 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
         axs.set_ylabel("$M \: [M_{\oplus}]$", size = 20) 
     axs.set_xlabel("r [AU]", size = 20) 
     axs.set_ylim(1e-7, 7e2)
-    #axs.set_xlim(3e-2, 1e2)
+    axs.set_xlim(5e-3, 1e2)
 
     all_y_ticks(axs, num_ticks=100)
 
@@ -707,7 +705,7 @@ def growth_timescale_heatmap(sim, params, sim_params, fig, axs,  title, fig_name
     axs.set_ylim(1e-6, 1e2)
     #plt.savefig("figures/tests/"+fig_name, bbox_inches='tight')
 
-def custom_log_formatter(x, pos):
+def custom_log_formatter_old(x, pos):
 	if x == 0:
 		return "0"
 	exponent = int(np.floor(np.log10(x)))
@@ -715,7 +713,17 @@ def custom_log_formatter(x, pos):
 	if coeff == 1:
 		return r"$10^{{{}}}$".format(exponent)
 	else:
-		return r"${:.1f} \times 10^{{{}}}$".format(coeff, exponent)
+		return  r"${:.1f} \times 10^{{{}}}$".format(coeff, exponent)
+
+def custom_log_formatter(x, pos):
+    exponent = int(np.floor(np.log10(x)))
+    coeff = x / 10**exponent
+    if x == 0:
+        return "0"
+    else:   
+        return x
+
+
 
 def generate_levels(Z):
 	Zmin = np.min(Z)

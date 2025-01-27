@@ -48,6 +48,8 @@ class Params:
     Z: float = 0.01 
     alpha: float = 1e-3
     alpha_frag: float = 1e-4
+    alpha_frag_out: float = 1e-4
+    alpha_frag_in: float = 10*alpha_frag_out
     alpha_z: float = 1e-4
     alpha_z_out: float = 1e-4   #value of alpha_z outside the iceline if iceline_alpha_change (replaces alpha_z)
     alpha_z_in: float = 10*alpha_z_out  #value of alpha_z outside the iceline if iceline_alpha_change (replaces alpha_z)
@@ -67,7 +69,8 @@ class Params:
     epsilon_p: float = 0.5
     epsilon_d: float = 0.05
     iceline_alpha_change: bool = False
-    iceline_flux_change: bool = True
+    iceline_alpha_frag_change: bool = False
+    iceline_flux_change: bool = False
     resonance_trapping: bool = True
 
     def update_alpha_z_iceline(self, pos, iceline_radius):
@@ -75,6 +78,14 @@ class Params:
             self.alpha_z = self.alpha_z_in
         else:
             self.alpha_z = self.alpha_z_out
+
+    def update_alpha_frag_iceline(self, pos, iceline_radius):
+        if pos < iceline_radius:
+            self.alpha_frag = self.alpha_frag_in
+        else:
+            self.alpha_frag = self.alpha_frag_out
+
+
 
 @dataclass
 class SimulationParams:
@@ -183,6 +194,8 @@ def evolve_system(
         # Iceline treatment: cuts the flux in half, increases the vertical stirring
         if params.iceline_alpha_change:
             params.update_alpha_z_iceline(positions[i], iceline(times, 170, params))
+        if params.iceline_alpha_frag_change:
+            params.update_alpha_frag_iceline(positions[i], iceline(times, 170, params))
             
         if params.iceline_flux_change:
             if params.iceline_radius == None:

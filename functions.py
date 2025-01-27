@@ -17,6 +17,7 @@ yr_to_Myr = (1*u.yr).to(u.Myr).value
 g_cm2_to_M_E_au2 = (1*u.g/u.cm**2).to(u.M_earth/u.au**2).value
 g_cm3_to_M_E_au3 = (1*u.g/u.cm**3).to(u.M_earth/u.au**3).value
 mm_to_au = (1*u.mm).to(u.au).value
+k_B = const.k_B.to(u.m**2*u.kg/u.s**2/u.K).value
 
 @u.quantity_input
 
@@ -50,8 +51,6 @@ def b_H(position, mass, St, params):
 
 def b_B(position, mass, v, St, params):
     """Impact paramter (aka accretion radius) in Bondi regime"""
-    print("Bondi radius", np.sqrt(v*St/omega_k(position, params)*R_B(mass, v)))
-    print("R_B", R_B(mass, v))
     return np.sqrt(v*St/omega_k(position, params)*R_B(mass, v))
 
 def eta(position, t, params):
@@ -72,7 +71,7 @@ def v_r(position, t, St, params):
 
 def c_s(T, params):
     """Isothermal speed of sound"""
-    return np.sqrt(const.k_B*T/(params.mu*const.m_p))*m_s_to_au_Myr
+    return np.sqrt(k_B*T/(params.mu*const.m_p.value))*m_s_to_au_Myr
     
 def T_mid (position, t, params):
     """reverting H/R = c_s / v_K to get T(R)"""
@@ -94,7 +93,7 @@ def iceline_visc(t, T, params):
     """Exact calculation using (H/R)_visc = c_s/v_K, with (H/R)_visc from pebble notes"""
     c = 0.024*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/(0.1*mm_to_au))**(-1/10)*(params.rho_gr/g_cm3_to_M_E_au3)**(-1/10)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)
     c_s_ice = c_s(T, params) # water iceline is defined where T=170K
-    return (c/c_s_ice*np.sqrt(const.G.cgs*params.star_mass))**(20/9)
+    return (c/c_s_ice*np.sqrt(G*params.star_mass))**(20/9)
 
 def iceline(t, T, params):
     """For a mixed disc the iceline is the max between the two"""
@@ -122,14 +121,8 @@ def st_drift_stokes(position, t,  params):
     lambda_mfp = mfp(position, t, sigma_gas_steady_state(position, t, params), params)
     rho_gas = rho_0(position, t, sigma_gas_steady_state(position, t, params), params)
     sigma_gas = sigma_gas_steady_state(position, t, params)
-    print("lambda_mfp",lambda_mfp)
-    print("rho_gas",rho_gas)
-    print("sigma_gas",sigma_gas)
     H = H_R(position, t, params)*position
     F = params.Z*M_dot_star(t, params)
-    print("F",F)
-    print("h/r",H_R(position, t, params)*position)
-    print("drift",(48*np.pi/np.sqrt(3)*sigma_gas/F*(rho_gas*H/params.rho_gr)**(-1/2)*np.sqrt(lambda_mfp)/(params.epsilon_p*omega_k(position, params))*eta(position, t, params)**2*v_k(position, params)**2)**(-2/3))
     return (48*np.pi/np.sqrt(3)*sigma_gas/F*(rho_gas*H/params.rho_gr)**(-1/2)*np.sqrt(lambda_mfp)/(params.epsilon_p*omega_k(position, params))*eta(position, t, params)**2*v_k(position, params)**2)**(-2/3)
 
 ##### WARNING: I REALLY DON'T THINK THIS IS NECESSARY TRUE
@@ -139,7 +132,6 @@ def st_drift(position, t,  params):
 
 def st_frag(position, t, params):
     """ fragmentation limited stokes number, according to original equation"""
-    print("frag",1/3*(params.alpha_frag)**(-1)*(params.v_frag)**2*(H_R(position, t, params))**(-2)*v_k(position, params)**(-2))
     return 1/3*(params.alpha_frag)**(-1)*(params.v_frag)**2*(H_R(position, t, params))**(-2)*v_k(position, params)**(-2)
 
 def st_frag_drift(position, t, params):
@@ -221,10 +213,6 @@ def sigma_gas_visc_Liu(position, t, params):
 
 def sigma_gas_steady_state(position, t, params):
     """Gas surface density for a steady state viscously evolving disc, equation (11) in Ida et al. 2016"""
-    print(M_dot_star(t, params))
-    print(omega_k(position, params))
-    print(H_R(position, t, params)**2)
-    print(position)
     return M_dot_star(t, params)/(3*np.pi*params.alpha*H_R(position, t, params)**2*position**2*omega_k(position, params))
 
 ###### PEBBLE SURFACE DENSITIES ############
