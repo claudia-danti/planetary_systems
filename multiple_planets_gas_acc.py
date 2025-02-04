@@ -64,7 +64,7 @@ class Params:
     rho_gr: u.Quantity  = (1*u.g/u.cm**3).to(u.M_earth/u.au**3).value
     mu: float = 2.34 #mean molecular weight
     cross_sec_H: float = 2e-15*u.cm**2 #collisional cross section of H2
-    kappa: u.Quantity = (0.005*u.m**2/u.kg).value #envelope opacity
+    kappa: u.Quantity = (0.005*u.m**2/u.kg).to(u.au**2/u.M_earth).value #envelope opacity
     beta0: float = (500 * u.g / u.cm**2).to(u.earthMass / u.au**2).value #surface density of the envelope
     epsilon_p: float = 0.5
     epsilon_d: float = 0.05
@@ -232,21 +232,22 @@ def evolve_system(
             #R_dot[i] = dR_dt(times, positions[i], masses[i], sigma_gas_val, params)
             R_dot[i] = dR_dt_both(times, positions[i], masses[i], sigma_gas_val, params) #includes type II prescription
 
-            print("ratio of the positions", (pos_out/positions[i])**(3/2))
+            #print("ratio of the positions", (pos_out/positions[i])**(3/2))
 
             # I want the resonance trapping to be activated only after the planets reach pebble isolation mass
             if params.resonance_trapping and masses[i] > M_peb_iso(positions[i], times, params) and masses[i-1] > M_peb_iso(positions[i-1], times, params):
                 if ((pos_out/positions[i])**(3/2))<2 and ((pos_out/positions[i])**(3/2))!= 1:
                 #if np.isclose((pos_out/positions[i])**(3/2), 2, rtol=1e-2, atol=1e-02, equal_nan=False) and ((pos_out/positions[i])**(3/2))!= 1:
                     #R_dot[i] = 0
+                    # outer planet gets trapped in resonance
                     R_dot[i-1] = 0
                     print("2:1 MMR reached for planets "+str(pos_out)[:4]+" and "+str(positions[i])[:4])
                     #positions[i] = meanmr_two_one_in(pos_out)
                     positions[i-1] = meanmr_two_one_out(positions[i])
-                    print("New positions: ", positions[i], positions[i-1])
-                    print("MMR ratio of positions ", (positions[i-1]/positions[i])**(3/2))
+                    # print("New positions: ", positions[i], positions[i-1])
+                    # print("MMR ratio of positions ", (positions[i-1]/positions[i])**(3/2))
                 else:
-                    #to keep migrating the planets after they reach peb iso
+                    # planet reaches inner edge
                     dead_by_mig = (positions[i] < r_magnetic_cavity(times, params))
                     R_dot[i, dead_by_mig] = 0  # dR/dt = 0 in case the planet has reached the inner edge 
                     positions[i, dead_by_mig] = r_magnetic_cavity(times, params)  # set the position to the inner edge
@@ -256,7 +257,7 @@ def evolve_system(
                         print("R_planet", positions[i])
                         print("magentic cavity", r_magnetic_cavity(times, params))
             else:
-                #to keep migrating the planets after they reach peb iso
+                #regardless of iso, check if the planet has reached the inner edge
                 dead_by_mig = (positions[i] < r_magnetic_cavity(times, params))
                 R_dot[i, dead_by_mig] = 0  # dR/dt = 0 in case the planet has reached the inner edge 
                 M_dot[i, dead_by_mig] = 0  # dM/dt = 0 in case the planet has reached the inner edge
@@ -297,8 +298,6 @@ def evolve_system(
         dead = (masses[i] > M_peb_iso(positions[i], times, params)) | (positions[i] < r_magnetic_cavity(times, params))  # cut the simulation once it reaches pebble isolaton mass or inner edge
         #filter_frac[i, dead] = 1 # in case the planet reaches peb iso or inner cutoff the ff is 1
         filter_frac[i, dead] = params.iso_filtering # in case the planet reaches peb iso or inner cutoff the ff is 1
-        print("params iso filtering", params.iso_filtering)
-        print("filter fraction after iso", filter_frac[i, dead])
         flux_ratio[i] = flux_on_planet[i]/F0
 
         if filtering:
@@ -314,15 +313,114 @@ def evolve_system(
 def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params):
     """Euler solver for the differential equation"""
     args = (migration, filtering, peb_acc, gas_acc, params, sim_params)
+    # Initialize lists to store values
+    t_values = [sim_params.t[0]]
+    mass_values = [sim_params.m0]
+    pos_values = [sim_params.a_p0]
 
+    # Run the first time the diff eq to have the right first values for the other quantities
+    m_dot, r_dot, filter_f, flux_p, flux, flux_ratio, R_acc, H_peb, R_acc_H, R_acc_B, Mdot_twoD_B, Mdot_twoD_H, Mdot_threeD_B, Mdot_threeD_H, Mdot_threeD_unif, Sigma_peb, Sigma_gas, HR, acc_regimes, gas_acc_dict = evolve_system(t_values[0], mass_values[0], pos_values[0], *args)
+
+    Mdot_values = [m_dot]
+    Rdot_values = [r_dot]
+    filter_values = [filter_f]
+    planet_flux_values = [flux_p]
+    F0_values = [flux]
+    flux_ratio_values = [flux_ratio]
+
+    # Debug quantities
+    r_acc = [R_acc]
+    h_peb = [H_peb]
+    r_acc_h = [R_acc_H]
+    r_acc_b = [R_acc_B]
+    mdot_twod_bondi = [Mdot_twoD_B]
+    mdot_twod_hill = [Mdot_twoD_H]
+    mdot_threed_bondi = [Mdot_threeD_B]
+    mdot_threed_hill = [Mdot_threeD_H]
+    mdot_threed_unif = [Mdot_threeD_unif]
+    sigma_peb = [Sigma_peb]
+    sigma_gas = [Sigma_gas]
+    H_r = [HR]
+
+    while t_values[-1] < sim_params.t_fin:
+        # Rename the end of each vector
+        t = t_values[-1]
+        m0 = mass_values[-1]
+        p0 = pos_values[-1]
+
+        # Euler integrator
+        mdot, rdot, ff, F_p, F0, F_ratio, racc, hpeb, raccH, raccB, mdottwoDB, mdottwoDH, mdotthreeDB, mdotthreeDH, mdotthreeDunif, sigmapeb, sigmagas, Hr, acc_regimes, gas_acc_dict = evolve_system(t, m0, p0, *args)
+        
+        m = sim_params.step_size * mdot + m0
+        p = sim_params.step_size * rdot + p0
+        
+        # Append values to lists
+        t_values.append(t + sim_params.step_size)
+        mass_values.append(m)
+        pos_values.append(p)
+        Mdot_values.append(mdot)
+        Rdot_values.append(rdot)
+        filter_values.append(ff)
+        planet_flux_values.append(F_p)
+        F0_values.append(F0)
+        flux_ratio_values.append(F_ratio)
+
+        # Debug quantities
+        r_acc.append(racc)
+        h_peb.append(hpeb)
+        r_acc_h.append(raccH)
+        r_acc_b.append(raccB)
+        mdot_twod_bondi.append(mdottwoDB)
+        mdot_twod_hill.append(mdottwoDH)
+        mdot_threed_bondi.append(mdotthreeDB)
+        mdot_threed_hill.append(mdotthreeDH)
+        mdot_threed_unif.append(mdotthreeDunif)
+        sigma_peb.append(sigmapeb)
+        sigma_gas.append(sigmagas)
+        H_r.append(Hr)
+
+    # Convert lists to arrays
+    t_values = np.array(t_values) * u.Myr
+    mass_values = np.array(mass_values).T * u.M_earth
+    pos_values = np.array(pos_values).T * u.au
+    Mdot_values = np.array(Mdot_values).T * u.M_earth / u.Myr
+    Rdot_values = np.array(Rdot_values).T * u.au / u.Myr
+    filter_values = np.array(filter_values).T
+    planet_flux_values = np.array(planet_flux_values).T * u.M_earth / u.Myr
+    F0_values = np.array(F0_values).T * u.M_earth / u.Myr
+    flux_ratio_values = np.array(flux_ratio_values).T
+    r_acc = np.array(r_acc).T * u.au
+    h_peb = np.array(h_peb).T
+    r_acc_h = np.array(r_acc_h).T * u.au
+    r_acc_b = np.array(r_acc_b).T * u.au
+    mdot_twod_bondi = np.array(mdot_twod_bondi).T * u.M_earth / u.Myr
+    mdot_twod_hill = np.array(mdot_twod_hill).T * u.M_earth / u.Myr
+    mdot_threed_bondi = np.array(mdot_threed_bondi).T * u.M_earth / u.Myr
+    mdot_threed_hill = np.array(mdot_threed_hill).T * u.M_earth / u.Myr
+    mdot_threed_unif = np.array(mdot_threed_unif).T * u.M_earth / u.Myr
+    sigma_peb = np.array(sigma_peb).T * u.M_earth / u.au**2
+    sigma_gas = np.array(sigma_gas).T * u.M_earth / u.au**2
+    H_r = np.array(H_r).T
+
+    # Create the SimulationResults object
+    simulation = SimulationResults(t_values, mass_values, pos_values, Mdot_values, Rdot_values, filter_values, 
+                                planet_flux_values, F0_values, flux_ratio_values, r_acc, h_peb, r_acc_h, 
+                                r_acc_b, mdot_twod_bondi, mdot_twod_hill, mdot_threed_bondi, mdot_threed_hill, 
+                                mdot_threed_unif, sigma_peb, sigma_gas, H_r, acc_regimes, gas_acc_dict)
+
+    # Write the result to a JSON file
+    with open('sims/gas_acc/sim_'+str(sim_params.nr_planets)+'planets_'+str(params.H_r_model)+'_'+str(params.epsilon_el)+'e_el_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_t'+str(sim_params.N_step)+'.json', 'w') as file:
+        json.dump(simulation.__dict__, file, cls=SimulationEncoder)
+
+    return simulation
+
+"""
     # creating the arrays that will be updated every timestep by appending the solution, so far they are 1D arrays
     t_values = np.array([sim_params.t[0]]) # 1D with the t initial value
     mass_values = np.array([sim_params.m0]) # 1D with the initial mass value
     pos_values = np.array([sim_params.a_p0]) # 1D with the initial position value
-    print("in simulate euler", pos_values[0])
     # I run the first time the diff eq to have the right first values for the other quantities
     m_dot, r_dot, filter_f, flux_p, flux , flux_ratio, R_acc, H_peb, R_acc_H, R_acc_B, Mdot_twoD_B, Mdot_twoD_H, Mdot_threeD_B, Mdot_threeD_H, Mdot_threeD_unif, Sigma_peb, Sigma_gas, HR, acc_regimes, gas_acc_dict = evolve_system(t_values[0], mass_values[0], pos_values[0], *args)
-    print("after the dm in simulate euler", m_dot)
     Mdot_values = np.array([m_dot]) # 1D (nr_planets) with values of 0 
     Rdot_values = np.array([r_dot])# 1D (nr_planets) with values of 0 
     filter_values = np.array([filter_f]) # 1D (nr_planets) with values of 0 
@@ -359,7 +457,6 @@ def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params):
         m = sim_params.step_size*(mdot) + m0
         p = sim_params.step_size*(rdot) + p0
         
-        print("alpha in t loop", params.alpha)
         #only update the values if the error is smaller than the tolerance
         # addition of the computed approximations to get the next value of the function
         #t_values = np.append(t_values, (t + sim_params.step_size))
@@ -397,7 +494,7 @@ def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params):
 
     return simulation
 
-"""
+
     # Initial timestep
     dt = sim_params.step_size
 

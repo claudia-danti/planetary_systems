@@ -137,6 +137,7 @@ def st_frag(position, t, params):
 def st_frag_drift(position, t, params):
     """Returns the minimum between drift and fragmentation"""
     if params.St_const == None:
+
         return np.minimum(st_drift(position, t, params), st_frag(position, t, params))
     else: 
         return params.St_const

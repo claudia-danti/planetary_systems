@@ -24,11 +24,11 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
     isolation_mass = M_peb_iso(position.value, time.value, params)
     stop_idx = np.argmin(position) #returns the position of the min value of position
     stop_mass_idx = np.any(np.where(dM_dt == 0)[0][0]) if np.any(np.where(dM_dt == 0)[0]) else dM_dt.size
-    print("m_iso", M_peb_iso(position.value, time.value, params))
     isolation_idx = np.where(mass.value > isolation_mass)[0]
     if isolation_idx.size > 0:
         isolation_idx = isolation_idx[0]
     else:
+        print("iso index = mass size")
         isolation_idx = mass.size
 
     if migration:
@@ -161,10 +161,10 @@ def plot_mass(axs, sim, params, sim_params, migration, color, **kwargs):
 
 def plot_filter_frac(axs, sim, params, sim_params, migration, **kwargs):
     """Plots the filtering fraction vs time of the simulated set of planets, possible migration"""
+    for p in [-1]:
+    #for p in range(sim_params.nr_planets-1,-1,-1):
 
-    for p in range(sim_params.nr_planets-1,-1,-1):
-
-        idx_df = idxs (axs, sim.time, sim.mass[p], sim.position[p], sim.filter_fraction[p], sim.dR_dt[p], params, migration, **kwargs)
+        idx_df = idxs (axs, sim.time, sim.mass[p], sim.position[p], sim.filter_fraction[p], sim.dR_dt[p], sim.dM_dt[p], params, migration, **kwargs)
         isolation_idx = idx_df['isolation_idx'].values[0]
         inner_edge_idx = idx_df['inner_edge_idx'].values[0]
         saturation_idx = idx_df['saturation_idx'].values[0]
@@ -173,19 +173,19 @@ def plot_filter_frac(axs, sim, params, sim_params, migration, **kwargs):
         end_idx = idx_df['end_idx'].values[0]
         stop_mig_idx = idx_df['stop_mig_idx'].values[0]
 
-        if 1 in sim.filter_fraction:
+        if 1 in sim.filter_fraction[p]:
             # checking that we reach 1 before isolation mass
             if saturation_idx < isolation_idx:
                 axs.scatter(sim.time[p,saturation_idx].to(u.yr), (sim.filter_fraction[p,saturation_idx])*100, marker = '*', **kwargs)
 
-        if isolation_idx < sim.mass.size:
-            axs.scatter(sim.time[p,isolation_idx+1].to(u.yr), (sim.filter_fraction[p,isolation_idx+1])*100, color = 'black', zorder =3)
+        if isolation_idx < sim.mass[p].size:
+            axs.scatter(sim.time[isolation_idx+1].to(u.yr), (sim.filter_fraction[p,isolation_idx+1])*100, color = 'black', zorder =3)
 
         #mask = filter_fraction[i,:] != 0 # gets rid of the 0 values of the filter fraction once the planet dies in the star
-        axs.plot(sim.time*u.s.to(u.yr), (sim.filter_fraction)*100, **kwargs)
-    axs.axvline(x = 1e7, linestyle="--", color = "grey", zorder = 0)
+        axs.plot(sim.time.to(u.yr), (sim.filter_fraction[p])*100, **kwargs)
+    #axs.axvline(x = 1e7, linestyle="--", color = "grey", zorder = 0)
     axs.autoscale(enable=True, axis='x', tight=True)
-    axs.axhline(y = 50, color = "grey")
+    #axs.axhline(y = 50, color = "grey")
     #axs.axvspan((3*u.Myr).to(u.yr).value, (20*u.Myr).to(u.yr).value, alpha = 0.05, color = "grey")
 
     axs.tick_params(axis = "both", length = 5, which = "minor")
@@ -194,7 +194,7 @@ def plot_filter_frac(axs, sim, params, sim_params, migration, **kwargs):
     axs.set_xlabel("t [yrs]", size = 15)
     axs.set_xscale("log")
     axs.legend()
-    axs.set_xlim(9e4, 2e7)
+    axs.set_xlim(9e4, 1e7)
 
 
 ### WARNING: the isolation mass is the one at the final simulation, but beware that the viscously heated H/R depends on the time through M_dot
@@ -266,10 +266,6 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
 
         axs.scatter(sim.position[p,stop_mig_idx].to(u.au), sim.mass[p,stop_mig_idx].to(u.earthMass), marker = 'x', color = 'grey', s = 100, zorder=100)
         
-        if nofilter:
-            axs.loglog(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9, zorder =1)
-            axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_idx], sim.mass[p,isolation_idx:stop_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9, zorder =1)
-
         if isolation_idx < sim.mass[p].size:
             dt= (sim.time[:isolation_idx]).to(u.Myr)
 
@@ -285,7 +281,11 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
 
         #if 1 in sim.filter_fraction:
             #axs.scatter(sim.position[p,saturation_idx].to(u.au), (sim.mass[p,saturation_idx].to(u.earthMass)), marker = '*', color = 'black')
-            
+        if nofilter:
+            axs.loglog(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9, zorder =1)
+            axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_idx], sim.mass[p,isolation_idx:stop_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9, zorder =1)
+
+             
 
     if add_cbar:
         #handling the colorbar	
