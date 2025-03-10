@@ -28,7 +28,7 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
     if isolation_idx.size > 0:
         isolation_idx = isolation_idx[0]
     else:
-        print("iso index = mass size")
+        #print("iso index = mass size")
         isolation_idx = mass.size
 
     if migration:
@@ -262,28 +262,39 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
         #print('inner', inner_edge_idx)
         #plot the growth track with color coding gven by the time it takes to grow
         #scatter grey points after they reach isolation mass
-        sc_post_iso = axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_mig_idx], sim.mass[p,isolation_idx:stop_mig_idx].to(u.earthMass), color='grey', linewidth=6, alpha = 0.1)
 
-        axs.scatter(sim.position[p,stop_mig_idx].to(u.au), sim.mass[p,stop_mig_idx].to(u.earthMass), marker = 'x', color = 'grey', s = 100, zorder=100)
-        
-        if isolation_idx < sim.mass[p].size:
-            dt= (sim.time[:isolation_idx]).to(u.Myr)
-
-            sc = axs.scatter(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
-
-            axs.scatter(sim.position.to(u.au)[p,isolation_idx], sim.mass[p,isolation_idx].to(u.earthMass), color = 'black', s = 150, zorder = 100)
-        else: 
-            dt= (sim.time[:stop_mig_idx]).to(u.Myr)
-
-            sc = axs.scatter(sim.position.to(u.au)[p,:stop_mig_idx], sim.mass[p,:stop_mig_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
-
-            #axs.scatter(sim.position.to(u.au)[-1],sim.mass[-1].to(u.earthMass), marker = 'x', color = 'grey',s = 100, zorder=100)
-
-        #if 1 in sim.filter_fraction:
-            #axs.scatter(sim.position[p,saturation_idx].to(u.au), (sim.mass[p,saturation_idx].to(u.earthMass)), marker = '*', color = 'black')
         if nofilter:
+
+            sc_post_iso = axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_mig_idx], sim.mass[p,isolation_idx:stop_mig_idx].to(u.earthMass), color='grey', linewidth=6, alpha = 0.1)
+            axs.scatter(sim.position[p,stop_mig_idx].to(u.au), sim.mass[p,stop_mig_idx].to(u.earthMass), marker = 'x', color = 'grey', s = 100, zorder=100)
+            if p!=0:
+                axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_mig_idx], sim.mass[p,isolation_idx:stop_mig_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9)
+
+            if isolation_idx < sim.mass[p].size:
+                dt= (sim.time[:isolation_idx]).to(u.Myr)
+                sc = axs.scatter(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
+                axs.scatter(sim.position.to(u.au)[p,isolation_idx], sim.mass[p,isolation_idx].to(u.earthMass), color = 'black', s = 150, zorder = 100)
+            else: 
+                dt= (sim.time[:stop_mig_idx]).to(u.Myr)
+                sc = axs.scatter(sim.position.to(u.au)[p,:stop_mig_idx], sim.mass[p,:stop_mig_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
+            
             axs.loglog(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9, zorder =1)
-            axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_idx], sim.mass[p,isolation_idx:stop_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9, zorder =1)
+
+        else:
+            if isolation_idx < sim.mass[p].size:
+                dt= (sim.time[:isolation_idx]).to(u.Myr)
+                sc = axs.scatter(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
+                axs.scatter(sim.position.to(u.au)[p,isolation_idx], sim.mass[p,isolation_idx].to(u.earthMass), color = 'black', s = 150, zorder = 100)
+            else: 
+                dt= (sim.time[:stop_mig_idx]).to(u.Myr)
+                sc = axs.scatter(sim.position.to(u.au)[p,:stop_mig_idx], sim.mass[p,:stop_mig_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
+
+                #axs.scatter(sim.position.to(u.au)[-1],sim.mass[-1].to(u.earthMass), marker = 'x', color = 'grey',s = 100, zorder=100)
+            axs.scatter(sim.position[p,stop_mig_idx].to(u.au), sim.mass[p,stop_mig_idx].to(u.earthMass), marker = 'x', color = 'grey', s = 100, zorder=100)
+            sc_post_iso = axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_mig_idx], sim.mass[p,isolation_idx:stop_mig_idx].to(u.earthMass), color='grey', linewidth=6, alpha = 0.1)
+
+            #if 1 in sim.filter_fraction:
+                #axs.scatter(sim.position[p,saturation_idx].to(u.au), (sim.mass[p,saturation_idx].to(u.earthMass)), marker = '*', color = 'black')
 
              
 
@@ -913,7 +924,7 @@ def label_line(line, label, x, y, color='0.5', size=12, **kwarg):
 def r_visc_irr(pos, t, params, sim_params):
     """computes the first transition from irradiated to viscous, for plotting purposes"""
     if params.H_r_model != 'irradiated':
-        a = np.where(H_R_irr(pos, params).value > H_R_visc_Lambrechts(pos, t, params).value)[0]
+        a = np.where(H_R_irr(pos, params) > H_R_visc_Lambrechts(pos, t, params))[0]
         print(a)
         if len(a)==0:
             return
@@ -927,11 +938,24 @@ def kepler11(axs, color):
     a_p0 = np.array([0.091, 0.107, 0.155, 0.195, 0.250, 0.466])*u.au
     m0 = np.array([2.78, 5, 8.13, 9.48, 2.43, 25])*u.M_earth
     # Plot the planets
-    axs.scatter(a_p0, m0, facecolors = 'none', color = color, zorder = 100)
+    axs.plot(a_p0, m0, "+", markersize=10, color = color,  zorder = 100)
 
 def solar_system(axs, color):
 
     a_p0 = np.array([0.39, 0.72, 1, 1.52, 5.2, 9.54, 19.2, 30.06 ])*u.au
     m0 = np.array([0.055, 0.815, 1, 0.107, 317.8, 95.2, 14.5, 17.1])*u.M_earth
-    axs.scatter(a_p0, m0, facecolors = 'none', color = color, zorder = 100)
+    axs.plot(a_p0, m0, "+", markersize=10, color = color, zorder = 100)
 
+def HD191939 (axs, color):
+    """System of planets TOI-1339, Orell-Miquell et al. 2022"""
+	
+    a_p0 = np.array([0.0804, 0.1752, 0.2132, 0.407, 0.812, 4.8 ])*u.au
+    m0 = np.array([10.00, 8.0, 2.80, 112.2, 13.5, 660])*u.M_earth
+    axs.plot(a_p0, m0, "+", markersize=10, color = color, zorder = 100)
+
+def HD219134 (axs, color):
+    """System of planets TOI-1469, Vogt et al. 2015"""
+
+    a_p0 = np.array([3.11, 0.3753, 0.23508,	0.14574, 0.064816, 0.0384740])*u.au
+    m0 = np.array([108, 11, 21, 8.9, 3.5, 3.8])*u.M_earth
+    axs.plot(a_p0, m0, "+", markersize=10, color = color, zorder = 100)

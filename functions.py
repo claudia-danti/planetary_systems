@@ -450,3 +450,13 @@ def meanmr_two_one_in(a_p_out):
 def meanmr_two_one_out(a_p_in):
     """gets the position of the 2:1 mean motion resonance outer planet given an inner planet"""
     return (2)**(2/3)*a_p_in
+
+def estimate_initial_step_size(masses, positions, mdot, rdot):
+    # Estimate characteristic timescales
+    tau_m = np.abs(masses / mdot)
+    tau_p = np.abs(positions / rdot)
+    
+    # Choose a fraction of the smallest timescale
+    initial_step_size = 0.1 * np.min([tau_m.min(), tau_p.min()])
+    
+    return initial_step_size

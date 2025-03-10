@@ -72,6 +72,7 @@ class Params:
     iceline_alpha_frag_change: bool = False
     iceline_flux_change: bool = False
     resonance_trapping: bool = True
+    gas_accretion: bool = True
 
     def update_alpha_z_iceline(self, pos, iceline_radius):
         if pos < iceline_radius:
@@ -280,12 +281,14 @@ def evolve_system(
             pos_out = positions[i]
             pos_previous = positions.copy()
 
-
         if masses[i] > M_peb_iso(positions[i], times, params):
-            M_dot[i], gas_accretion_dict = gas_acc.dMc_dt_gas(times, masses[i], positions[i], params, sim_params)
+            # to give the option of not having gas accretion (for the timescale plots)
+            if params.gas_accretion:
+                M_dot[i], gas_accretion_dict = gas_acc.dMc_dt_gas(times, masses[i], positions[i], params, sim_params)
+            else:
+                M_dot[i] = 0
         else:
-            #this is just otherwise the gas acc dict does not work
-            gas_accretion_dict = None
+            gas_accretion_dict = None #just otherwise the dict is not defined
 
         # The planets should stop at Jupiter mass
         dead_by_mass = masses[i] > const.M_jup.to(u.M_earth).value
