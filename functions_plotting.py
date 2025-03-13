@@ -24,9 +24,10 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
     isolation_mass = M_peb_iso(position.value, time.value, params)
     stop_idx = np.argmin(position) #returns the position of the min value of position
     stop_mass_idx = np.any(np.where(dM_dt == 0)[0][0]) if np.any(np.where(dM_dt == 0)[0]) else dM_dt.size
-    isolation_idx = np.where(mass.value > isolation_mass)[0]
-    if isolation_idx.size > 0:
-        isolation_idx = isolation_idx[0]
+    iso_idx = np.argmax(mass.value > isolation_mass)
+    
+    if iso_idx !=0:
+        isolation_idx = iso_idx
     else:
         #print("iso index = mass size")
         isolation_idx = mass.size
@@ -257,7 +258,7 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
         stop_mig_idx = idx_df['stop_mig_idx'].values[0]
         stop_mass_idx = idx_df['stop_mass_idx'].values[0]
         pos = np.geomspace(1e-2,200, num=sim_params.N_step+1)
-        norm=mpl.colors.LogNorm(vmin = 0.1, vmax = 10)
+        norm=mpl.colors.LogNorm(vmin = sim_params.t_in, vmax = sim_params.t_fin)
         print('planet '+str(sim_params.a_p0[p]*(u.au))+" iso mass at ", sim.time[isolation_idx].to(u.Myr) if isolation_idx < sim.mass[p].size else "no iso, end of sim")
         #print('inner', inner_edge_idx)
         #plot the growth track with color coding gven by the time it takes to grow
@@ -301,15 +302,15 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
     if add_cbar:
         #handling the colorbar	
         #fig.subplots_adjust(right=0.8)
-        cbar_ax = fig.add_axes([0.95, 0.15, 0.03, 0.7])
+        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
         cbar = fig.colorbar(sc, cax=cbar_ax)	
         # Manually set the colorbar boundaries and ticks
-        cbar_ax.yaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 5.0]))
+        cbar_ax.yaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 2.0, 5.0, ]))
         cbar_ax.yaxis.set_major_formatter(LogFormatter())
         cbar.ax.yaxis.set_major_formatter(plt.FuncFormatter(custom_log_formatter))
-        cbar.set_label('accretion timescale [Myr]', fontsize=20, labelpad=15)
-        cbar.ax.tick_params(axis = 'both', which = 'major', size = 13, labelsize = 13)
-        cbar.ax.tick_params(axis = 'both', which = 'minor', size = 9)
+        cbar.set_label('accretion time [Myr]', fontsize=25, labelpad=15)
+        cbar.ax.tick_params(axis = 'both', which = 'major', size = 18, labelsize = 18)
+        cbar.ax.tick_params(axis = 'both', which = 'minor', size = 12)
         
    
     # #plot the initial mass line
@@ -326,15 +327,16 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
     axs.axvline(r_magnetic_cavity(sim_params.t_fin, params), linestyle = '-.', color = 'grey', alpha = 0.05)
     axs.axvspan(r_magnetic_cavity(sim_params.t_in, params), r_magnetic_cavity(sim_params.t_fin, params),facecolor='none', hatch='/', edgecolor='gray', alpha =0.05)
 
-    axs.tick_params(axis = "both", length = 15)
-    axs.tick_params(axis = "both", length = 10, which = "minor")
+    axs.tick_params(axis = "both", length = 15, labelsize = 18)
+    axs.tick_params(axis = "both", length = 10, which = "minor", labelsize = 18)
     if add_ylabel:
-        axs.set_ylabel("$M \: [M_{\oplus}]$", size = 20) 
-    axs.set_xlabel("r [AU]", size = 20) 
+        axs.set_ylabel("$M \: [M_{\oplus}]$", size = 25) 
+    axs.set_xlabel("r [AU]", size = 25) 
     axs.set_ylim(1e-7, 7e2)
     axs.set_xlim(5e-3, 1e2)
 
     all_y_ticks(axs, num_ticks=100)
+    all_x_ticks(axs, num_ticks=100)
 
 
 
@@ -805,6 +807,17 @@ def all_y_ticks(axs, num_ticks):
     y_minor = mpl.ticker.LogLocator(base = 10.0, subs = np.arange(1.0, 10.0) * 0.1, numticks = num_ticks)
     axs.yaxis.set_minor_locator(y_minor)
     axs.yaxis.set_minor_formatter(mpl.ticker.NullFormatter())
+    plt.tick_params(axis = 'both', which = 'major', size = 10)
+    plt.tick_params(axis = 'both', which = 'minor', size = 5)
+
+def all_x_ticks(axs, num_ticks):
+    """to plot all the ticks on the y axis, N.B. num_ticks must be bigger than the nr big ticks"""
+
+    x_major = mpl.ticker.LogLocator(base = 10.0, numticks = num_ticks)
+    axs.xaxis.set_major_locator(x_major)
+    x_minor = mpl.ticker.LogLocator(base = 10.0, subs = np.arange(1.0, 10.0) * 0.1, numticks = num_ticks)
+    axs.xaxis.set_minor_locator(x_minor)
+    axs.xaxis.set_minor_formatter(mpl.ticker.NullFormatter())
     plt.tick_params(axis = 'both', which = 'major', size = 10)
     plt.tick_params(axis = 'both', which = 'minor', size = 5)
 

@@ -3,7 +3,7 @@ import astropy.units as u
 import astropy.constants as const
 import matplotlib.pyplot as plt
 from matplotlib import cm
-
+import pandas as pd
 ### UNITS AND CONVERSIONS ######
 # masses -> earth masses
 # times -> Myr
@@ -460,3 +460,112 @@ def estimate_initial_step_size(masses, positions, mdot, rdot):
     initial_step_size = 0.1 * np.min([tau_m.min(), tau_p.min()])
     
     return initial_step_size
+
+
+def planet_counter(simulations, parameters, sim_parameters):
+    """Counts the types of planets in the simulation"""
+    HJ_counter, WJ_counter, CG_counter, SE_counter, sub_E_counter, terr_in_counter, giant_counter = 0,0,0,0,0,0,0
+
+    for i in range(len(simulations)):
+        sim = simulations[i]
+        params = parameters
+        sim_params = sim_parameters
+
+        for p in range(1,sim_params.nr_planets):
+            idx = idxs (sim.time[p], sim.mass[p], sim.position[p], sim.filter_fraction[p], 
+                            sim.dR_dt[p], sim.dM_dt[p], params, True)
+            stop_mig_idx = idx['stop_mig_idx'].values[0]
+
+            m_fin_idx = stop_mig_idx
+
+            if 1<sim.mass[p,m_fin_idx].to(u.M_earth).value<20 and sim.position[p,m_fin_idx].to(u.au).value<1:
+                SE_counter +=1
+            if 0.01<sim.mass[p,m_fin_idx].to(u.M_earth).value<1:
+                if sim.position[p, m_fin_idx].to(u.au).value<0.1:
+                    terr_in_counter +=1    
+                else:
+                    sub_E_counter +=1
+            if sim.mass[p,m_fin_idx].to(u.M_earth).value>=100:
+                giant_counter += 1
+                if 0.01<sim.position[p,m_fin_idx].to(u.au).value<0.1:
+                    HJ_counter +=1
+                if 0.1<sim.position[p,m_fin_idx].to(u.au).value<2:
+                    WJ_counter +=1
+                if 2<sim.position[p,m_fin_idx].to(u.au).value<10:
+                    CG_counter +=1
+    dict_planets = {'HJ': HJ_counter, 'WJ': WJ_counter, 'CG': CG_counter+1, 'SE': SE_counter, 'sub_E':sub_E_counter,  'terr_in': terr_in_counter, 'terr_tot': terr_in_counter+sub_E_counter,  'giant': giant_counter}
+    return dict_planets
+
+
+def idxs (time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration, **kwargs):
+    #Creates the index dictionary
+
+    idx_or_last = lambda fltr: np.argmax(fltr) if np.any(fltr) else fltr.size
+    isolation_mass = M_peb_iso(position.value, time.value, params)
+    stop_idx = np.argmin(position) #returns the position of the min value of position
+    stop_mass_idx = np.any(np.where(dM_dt == 0)[0][0]) if np.any(np.where(dM_dt == 0)[0]) else dM_dt.size
+    isolation_idx = np.where(mass.value > isolation_mass)[0]
+    if isolation_idx.size > 0:
+        isolation_idx = isolation_idx[0]
+    else:
+        #print("iso index = mass size")
+        isolation_idx = mass.size
+
+    if migration:
+        stop_mig_indices = np.where(dR_dt == 0)[0]
+        if stop_mig_indices.size > 0:
+            stop_mig_idx = stop_mig_indices[0]
+        else:
+            stop_mig_idx = len(dR_dt) - 1  # or some other default value
+        # Returns the position of the first time for which r < r_mag
+        #returns the position of the first time for which r<r_mag 
+        inner_edge_idx = idx_or_last(position.value < r_magnetic_cavity(time.value, params))
+        if stop_idx < inner_edge_idx:
+            coll_or_res_idx = stop_idx
+            end_idx = min(inner_edge_idx, coll_or_res_idx)
+
+        else:
+            coll_or_res_idx = None
+            end_idx = inner_edge_idx
+
+    else:
+        if isolation_idx < mass.size:
+            death_idx = isolation_idx
+        else:
+            death_idx = mass.size-1
+        suicide_idx = death_idx
+
+    if 1 in filter_fraction:
+        saturation_idx = np.argmax(filter_fraction == 1)
+    else:
+        saturation_idx = None
+
+    df = pd.DataFrame({
+        'isolation_idx': [isolation_idx],
+        'inner_edge_idx': [inner_edge_idx],
+        'saturation_idx': [saturation_idx],
+        'stop_idx': [stop_idx],
+        'coll_or_res_idx': [coll_or_res_idx],
+        'end_idx': [end_idx],
+        'stop_mig_idx': [stop_mig_idx],
+        'stop_mass_idx': [stop_mass_idx]
+    })
+    return df
+
+
+
+def kepler_3_law (period):
+    return ((const.G.cgs*const.M_sun.cgs/(4*np.pi**2)*period**2)**(1/3)).to(u.au)
+
+def radius_mass_exo(radius, rocky = True):
+    if rocky:
+        rho = 5.5* u.g/u.cm**3
+    else:
+        rho = 1* u.g/u.cm**3
+    return 4/3*np.pi*radius**3*rho
+
+
+
+def MMSN (position):
+    """Minimum mass solar nebula according to Hayashi 1981"""
+    return (1700*(position)**(-3/2)*u.g/u.cm**2).to(u.M_earth/u.au**2)

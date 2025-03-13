@@ -226,14 +226,15 @@ class PebbleAccretion:
                 is_2d_case = True
                 #self.flagging(is_2d_case,is_Hill_case, t, M_core)
 
-        ##debug quantities
-        Mdot_twoD_Bondi = M_dot_TwoD(b_B(position, M_core, v_hw(position, t, params), St, params), sigma_peb, v_hw(position, t, params))
-        Mdot_twoD_Hill =  M_dot_TwoD(b_H(position, M_core, St, params), sigma_peb, 3/2*omega_k(position, params)*b_H(position, M_core, St, params))
-        Mdot_threeD_Bondi = M_dot_ThreeD(position, t, b_B(position, M_core, v_hw(position, t, params), St, params), sigma_peb, v_hw(position, t, params), St, params)
-        Mdot_threeD_Hill = M_dot_ThreeD(position, t, b_H(position, M_core, St, params), sigma_peb, 3/2*omega_k(position, params)*b_H(position, M_core, St, params), St, params)
-        Mdot_threeD_unif = M_dot_ThreeD_unif(position, t, M_core, sigma_peb, St, params)
-        H_r = H_R(position, t, params)
-        return dMc_dt, R_acc, H_peb(St, position, t, params)*(2*np.sqrt(2*np.pi)/np.pi), R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_threeD_unif, sigma_peb, sigma_gas, H_r, self.acc_regime_dict   
+        # ##debug quantities
+        # Mdot_twoD_Bondi = M_dot_TwoD(b_B(position, M_core, v_hw(position, t, params), St, params), sigma_peb, v_hw(position, t, params))
+        # Mdot_twoD_Hill =  M_dot_TwoD(b_H(position, M_core, St, params), sigma_peb, 3/2*omega_k(position, params)*b_H(position, M_core, St, params))
+        # Mdot_threeD_Bondi = M_dot_ThreeD(position, t, b_B(position, M_core, v_hw(position, t, params), St, params), sigma_peb, v_hw(position, t, params), St, params)
+        # Mdot_threeD_Hill = M_dot_ThreeD(position, t, b_H(position, M_core, St, params), sigma_peb, 3/2*omega_k(position, params)*b_H(position, M_core, St, params), St, params)
+        # Mdot_threeD_unif = M_dot_ThreeD_unif(position, t, M_core, sigma_peb, St, params)
+        # H_r = H_R(position, t, params)
+        #return dMc_dt, R_acc, H_peb(St, position, t, params)*(2*np.sqrt(2*np.pi)/np.pi), R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_threeD_unif, sigma_peb, sigma_gas, H_r, self.acc_regime_dict   
+        return dMc_dt, sigma_peb, sigma_gas, self.acc_regime_dict   
 
     def dMc_dt_f(self, t, M_core, position, flux, flux_reduction_factor, params, sim_params):
         #core accretion rate according to equation (28) of LJ14, filtering fraction passed as an argument
@@ -251,9 +252,11 @@ class PebbleAccretion:
         # filtered amount of pebbles to be accreted
         sigma_peb_filtered = sigma_from_flux_general(position, t, flux_reduced, stokes_peb, params)
 
-        dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r, acc_reg_dict  =  self.compute_accretion_regime(t, position, M_core, stokes_peb, sigma_peb_filtered, sigma_gas, params)
+        #dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r, acc_reg_dict  =  self.compute_accretion_regime(t, position, M_core, stokes_peb, sigma_peb_filtered, sigma_gas, params)
+        dMc_dt, sigma_peb, sigma_gas, acc_reg_dict  =  self.compute_accretion_regime(t, position, M_core, stokes_peb, sigma_peb_filtered, sigma_gas, params)
         
-        return dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r, acc_reg_dict
+        #return dMc_dt, R_acc, Hpeb, R_acc_H, R_acc_B, Mdot_twoD_Bondi, Mdot_twoD_Hill, Mdot_threeD_Bondi, Mdot_threeD_Hill, Mdot_ThreeD_unif, sigma_peb, sigma_gas, H_r, acc_reg_dict
+        return dMc_dt, sigma_peb, sigma_gas, acc_reg_dict
 
 ################## GAS ACCRETION FUNCTIONS ####################
 def M_dot_gas_KH( M_core, params):
