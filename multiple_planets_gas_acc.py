@@ -7,7 +7,7 @@ import astropy.constants as const
 import json
 from scipy.integrate import solve_ivp
 from dataclasses import dataclass, field
-
+import os
 from functions import *
 from functions_pebble_accretion import *
 from functions_plotting import *
@@ -330,7 +330,7 @@ def evolve_system(
     return M_dot, R_dot, filter_frac, flux_on_planet, F0, flux_ratio, sigma_peb, sigma_gas, acc_regimes, gas_accretion_dict
 
 
-def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params):
+def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params, output_folder='sims/gas_acc'):
     """Euler solver for the differential equation"""
     args = (migration, filtering, peb_acc, gas_acc, params, sim_params)
     # Initialize lists to store values
@@ -449,10 +449,22 @@ def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params):
    # Create the SimulationResults object
     simulation = SimulationResults(t_values, mass_values, pos_values, Mdot_values, Rdot_values, filter_values, 
                                 planet_flux_values, F0_values, flux_ratio_values, sigma_peb, sigma_gas, acc_regimes, gas_acc_dict)
+    
+    # Create the output directory if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
 
-    # Write the result to a JSON file
-    with open('sims/gas_acc/sim_'+str(sim_params.nr_planets)+'planets_'+str(sim_params.m0[-1])+str(params.H_r_model)+'_'+str(params.epsilon_el)+'e_el_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_t'+str(sim_params.N_step)+'.json', 'w') as file:
+    # Construct file paths
+    sim_filename = os.path.join(output_folder, 'simulation_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'.json')
+    sim_params_filename = os.path.join(output_folder, 'sim_params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'.json')
+    params_filename = os.path.join(output_folder, 'params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'.json')
+
+    # Write the result to JSON files
+    with open(sim_filename, 'w') as file:
         json.dump(simulation.__dict__, file, cls=SimulationEncoder)
+    with open(sim_params_filename, 'w') as file:
+        json.dump(sim_params.__dict__, file, cls=SimulationEncoder)
+    with open(params_filename, 'w') as file:
+        json.dump(params.__dict__, file, cls=SimulationEncoder)
 
     return simulation
 

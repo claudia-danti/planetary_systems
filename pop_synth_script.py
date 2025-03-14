@@ -36,9 +36,8 @@ params_dict = {'St_const': None,
 params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed')
 
 
-
 t_fin = 5 #Myr, end of sim
-N_steps = 5000 #number of steps of the sim 
+N_steps = 100 #number of steps of the sim 
 
 # Number of samples to generate
 num_samples = 20
@@ -56,40 +55,24 @@ a_p0_outer = np.array([30])
 t0_outer = ([0.2] * np.ones(len(a_p0_outer)) ) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
 m0_outer = M0_pla(a_p0_outer, t0_outer, sigma_gas_steady_state(a_p0_outer, t0_outer, params), params)
 
-# number of processors
-nprocs = 4 # change it if you want
+for  a_p0_in, t0_in in zip(a_p0_inner_samples, t0_inner_samples):
 
+    #initial conditions: both a_p0 and m0 take the outer planet and one of the inner planets
+    sigma_gas_inner = sigma_gas_steady_state(a_p0_in, t0_in, params)
+    m0_in = M0_pla(a_p0_in, t0_in, sigma_gas_inner, params)
 
-all_parameters = [pair+(params,) for pair in zip(a_p0_inner_samples,t0_inner_samples)]
+    a_p0 = np.array([*a_p0_outer, a_p0_in])
+    m_0 = np.array([*m0_outer, m0_in])
+    t0 = np.array([*t0_outer, t0_in])
 
-def kernel(params_tuple):
-    try: 
-        a_p0_in, t0_in, params = params_tuple
-        #initial conditions: both a_p0 and m0 take the outer planet and one of the inner planets
-        sigma_gas_inner = sigma_gas_steady_state(a_p0_in, t0_in, params)
-        m0_in = M0_pla(a_p0_in, t0_in, sigma_gas_inner, params)
-    
-        a_p0 = np.array([*a_p0_outer, a_p0_in])
-        m_0 = np.array([*m0_outer, m0_in])
-        t0 = np.array([*t0_outer, t0_in])
+    sim_params_dict = {'N_step': N_steps,
+                    'm0': m_0,
+                    'a_p0': a_p0,
+                    't0': t0,
+                    't_fin': t_fin,
+                }
+    sim_params = code_gas.SimulationParams(**sim_params_dict)
+    peb_acc = code_gas.PebbleAccretion(simplified_acc=False)
+    gas_acc = peb.GasAccretion()
 
-        sim_params_dict = {'N_step': N_steps,
-                        'm0': m_0,
-                        'a_p0': a_p0,
-                        't0': t0,
-                        't_fin': t_fin,
-                    }
-        sim_params = code_gas.SimulationParams(**sim_params_dict)
-        peb_acc = code_gas.PebbleAccretion(simplified_acc=False)
-        gas_acc = peb.GasAccretion()
-
-        result = code_gas.simulate_euler(migration = True, filtering = True, peb_acc = peb_acc, gas_acc=gas_acc, params=params, sim_params=sim_params)
-
-        return True
-    except:
-        return False
-
-# loop the sims
-with mp.Pool(nprocs) as pool:
-	all_results = pool.map(kernel, all_parameters)
-	
+    result = code_gas.simulate_euler(migration = True, filtering = True, peb_acc = peb_acc, gas_acc=gas_acc, params=params, sim_params=sim_params, output_folder='sims/gas_acc/test_folder')

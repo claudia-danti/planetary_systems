@@ -468,8 +468,8 @@ def planet_counter(simulations, parameters, sim_parameters):
 
     for i in range(len(simulations)):
         sim = simulations[i]
-        params = parameters
-        sim_params = sim_parameters
+        params = parameters[i]
+        sim_params = sim_parameters[i]
 
         for p in range(1,sim_params.nr_planets):
             idx = idxs (sim.time[p], sim.mass[p], sim.position[p], sim.filter_fraction[p], 
