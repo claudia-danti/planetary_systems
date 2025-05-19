@@ -50,6 +50,13 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
             end_idx = inner_edge_idx
 
     else:
+        
+        # only because otherwise the dict complains
+        inner_edge_idx = r_magnetic_cavity(time.value, params)
+        coll_or_res_idx = -1
+        end_idx = -1
+        stop_mig_idx = -1
+        #####
         if isolation_idx < mass.size:
             death_idx = isolation_idx
         else:
@@ -316,7 +323,7 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
     # #plot the initial mass line
     print(sim_params.t_in)
     a_p0 = np.geomspace(1e-3, 1e2, num = 1000)
-    m0 = M0_pla(a_p0, sim_params.t_in, sigma_gas_steady_state(a_p0, sim_params.t_in, params), params)
+    m0 = M0_pla_Mstar(a_p0, sim_params.t_in, sigma_gas_steady_state(a_p0, sim_params.t_in, params), params)
     axs.loglog(a_p0, m0, linestyle  = ':', color = 'lightblue', zorder = 0)
     #plot the isolation mass line
     axs.loglog(a_p0, M_peb_iso(a_p0, sim_params.t_in, params), color = "slateblue", linestyle =':', zorder = 0)
@@ -332,8 +339,9 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
     if add_ylabel:
         axs.set_ylabel("$M \: [M_{\oplus}]$", size = 25) 
     axs.set_xlabel("r [AU]", size = 25) 
-    axs.set_ylim(1e-7, 7e2)
-    axs.set_xlim(5e-3, 1e2)
+    axs.set_ylim(1e-9, 7e2)
+    #axs.set_xlim(5e-3, 1e2)
+    axs.set_xlim(1e-2, 2)
 
     all_y_ticks(axs, num_ticks=100)
     all_x_ticks(axs, num_ticks=100)
@@ -972,3 +980,126 @@ def HD219134 (axs, color):
     a_p0 = np.array([3.11, 0.3753, 0.23508,	0.14574, 0.064816, 0.0384740])*u.au
     m0 = np.array([108, 11, 21, 8.9, 3.5, 3.8])*u.M_earth
     axs.plot(a_p0, m0, "+", markersize=10, color = color, zorder = 100)
+
+
+def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = True, ss_moons = True, roman_sensitivity= False):
+    """"Script to plot the roman sensitivity curves from https://github.com/mtpenny/wfirst-ml-figures/tree/master/sensitivity"""
+    
+    import json
+    #Add the Solar System planet images
+    #Uses the solution by Joe Kington from https://stackoverflow.com/questions/22566284/matplotlib-how-to-plot-images-instead-of-points
+    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+
+
+    def imscatter(x, y, image, ax=None, zoom=1):
+        if ax is None:
+            ax = plt.gca()
+        try:
+            image = plt.imread(image)
+        except TypeError:
+            # Likely already an array...
+            pass
+        im = OffsetImage(image, zoom=zoom)
+        x, y = np.atleast_1d(x, y)
+        artists = []
+        for x0, y0 in zip(x, y):
+            ab = AnnotationBbox(im, (x0, y0), xycoords='data', frameon=False)
+            artists.append(ax.add_artist(ab))
+        ax.update_datalim(np.column_stack([x, y]))
+        ax.autoscale()
+        return artists
+        
+
+    if solar_system:
+        planetsize=0.1
+        imscatter([0.387098],[0.055], 'roman_sensitivity/mercury.png',ax=ax,zoom=planetsize*0.3)
+        imscatter([0.723332],[0.815], 'roman_sensitivity/venus.png',ax=ax,zoom=planetsize*0.9)
+        imscatter([1],[1],'roman_sensitivity/Earth_Western_Hemisphere_transparent_background.png',ax=ax,zoom=planetsize)
+        imscatter([1.523679],[0.107], 'roman_sensitivity/mars.png',ax=ax,zoom=planetsize*240/500.0*0.9)
+        imscatter([5.204267],[317.8],'roman_sensitivity/jupiter.png',ax=ax,zoom=planetsize)
+        imscatter([9.582017],[95.152],'roman_sensitivity/saturn.png',ax=ax,zoom=planetsize*1.35)
+        imscatter([19.229411],[15.91],'roman_sensitivity/uranus.png',ax=ax,zoom=planetsize)
+        imscatter([30.103662],[17.147],'roman_sensitivity/neptune.png',ax=ax,zoom=planetsize)
+    if ss_moons:
+        planetsize=0.1
+        imscatter([1],[0.7349/59.736],'roman_sensitivity/moon.png',ax=ax,zoom=planetsize*0.5)
+        imscatter([5.204267],[1.4819/59.736],'roman_sensitivity/ganymede.png',ax=ax,zoom=planetsize)
+        imscatter([9.582017],[1.346/59.736],'roman_sensitivity/titan.png',ax=ax,zoom=planetsize*0.22)
+
+
+    #Axis limits
+    Mmin=0.01
+    Mmax=10000 #15000
+    amin=0.009
+    amax=100
+
+    mjup=317.83
+    msun=1/3.0024584e-6   
+
+
+    amin=0.009
+    amax=100
+
+    if roman:
+        ## ROMAN SENSITIVITY LINE
+        nroaltparfile = 'roman_sensitivity/fitmaplimitsolns_NRO_layout_7f_3_covfac_52_3.json'
+        nroaltpars = json.load(open(nroaltparfile,'r'))
+
+        def nroalt(x,pars):
+            return pars['a'] + pars['b']*x + pars['g']*np.sqrt(pars['d']**2+(x-pars['e'])**2)
+
+        fittedx = np.arange(np.log10(amin)-1,np.log10(amax)+1,0.05)
+        fittedline=nroalt(fittedx,nroaltpars)
+        ax.plot(10**fittedx,10**fittedline,'-',color='b',lw=3)
+        ax.text(20,0.17,'$Roman$',color='b',rotation=45)
+    if roman_sensitivity:
+        ### ROMAN SENSITIVITY CONTOURS
+        smap = np.loadtxt('roman_sensitivity/all.magrid.NRO.layout_7f_3_covfac.52.filled') 
+        x = 10**smap[:33,0]
+        y = 10**smap[::33,1]
+        print(smap.shape,x.shape[0]*y.shape[0])
+        X,Y=np.meshgrid(x,y)
+        z = smap[:,2].reshape(X.shape) 
+        print("x",x)
+        print("y",y)
+        #Contours in log sensitivity
+        cf = ax.contourf(X,Y,z,cmap='Blues',levels=[-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5],vmin=-1,vmax=8)
+        cbar = plt.colorbar(cf,ax=ax,label='$Roman$ Sensitivity $-$ the number of planet detections\n expected if there is 1 planet per star at $(a,M_{\\rm p})$',ticks=[-1,0,1,2,3,4])
+        cbar.ax.set_yticklabels(['0.1','1','10','100','1000','10000'])
+
+    if kepler:
+        ### KEPLER SENSITIVITY LINE
+        #The Kepler line
+        kepx = np.arange(np.log10(amin),np.log10(amax),0.05)
+        def kep(x):
+            ret = np.zeros(x.shape) + Mmax*100.1
+            xx = 10**x
+            xm = (xx<1.2)
+            ret[xm] = 0.68*xx[xm]**0.75
+            return ret 
+
+        def kepburke2015(x):
+            ret = np.zeros(x.shape) + Mmax*100.1
+            xx = 10**x
+            a0 = (530.0/365.25)**(2.0/3.0)
+            xm = (xx<a0)
+            ret[xm] = 2.2*(xx[xm]/a0)**0.75
+            return ret 
+
+        ax.plot(10**kepx,kepburke2015(kepx),'-',color='r',lw=3)
+        ax.text(0.011,0.085,'$Kepler$',color='r',rotation=23)
+
+    # ax.set_axisbelow(False)
+    # ax.set_xlabel('$a_{\mathrm {p}}$ [AU]')
+    # ax.set_ylabel('$M_{\mathrm {p}} [M_{\oplus}]$')
+    # ax.set_xscale("log")
+    # ax.set_yscale("log")
+    # ax.set_xlim([amin,amax])
+    # ax.set_ylim([Mmin,Mmax])
+    # import matplotlib.ticker as ticker
+    # ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
+    # ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
+    # ax.legend(loc=3,mode="expand",bbox_to_anchor=(0.0,0.995,1.0,0.102),ncol=3,fontsize=12,numpoints=1,handletextpad=-0.5)
+    # plt.tight_layout()
+
+    plt.savefig("figures/roman_sensitivity", dpi=300)

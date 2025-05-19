@@ -18,6 +18,9 @@ g_cm2_to_M_E_au2 = (1*u.g/u.cm**2).to(u.M_earth/u.au**2).value
 g_cm3_to_M_E_au3 = (1*u.g/u.cm**3).to(u.M_earth/u.au**3).value
 mm_to_au = (1*u.mm).to(u.au).value
 k_B = const.k_B.to(u.m**2*u.kg/u.s**2/u.K).value
+kg_to_M_E = (1*u.kg).to(u.M_earth).value
+s_to_Myr = (1*u.s).to(u.Myr).value
+erg_s_to_au_M_E_Myr = (1*u.erg/u.s).to(u.au**2*u.M_earth/u.Myr**3).value
 
 @u.quantity_input
 
@@ -75,7 +78,11 @@ def c_s(T, params):
     
 def T_mid (position, t, params):
     """reverting H/R = c_s / v_K to get T(R)"""
-    return (H_R(position, t, params)*v_k(position, params))**2*params.mu*(const.m_p/const.k_B/m_s_to_au_Myr)
+    return (H_R(position, t, params)*v_k(position, params))**2*params.mu*(const.m_p/const.k_B/m_s_to_au_Myr**2)
+
+def T_MMSN(position, params):
+    phi = 0.5
+    return (params.star_luminosity*phi/(8*np.pi*const.sigma_sb*kg_to_M_E/s_to_Myr**3*position**2))**(1/4)
 
 def r_magnetic_cavity(t, params):
     """Position of the magnetic cavity according to equation (5) of Liu et al. 2017"""
@@ -85,13 +92,13 @@ def r_magnetic_cavity(t, params):
 # The iceline are computed where T_midplane = 170 K, based on the 
 def iceline_irr(t, T, params):
     """Exact calculation using (H/R)_irr = c_s/v_K, with (H/R)_irr from Ida et al.2016"""
-    c = 0.024*(params.star_luminosity/L_sun_au_M_E_Myr)**(1/7)*(params.star_mass/M_sun_M_E)**(-4/7)
+    c = 0.024*((params.star_luminosity/L_sun_au_M_E_Myr))**(1/7)*(params.star_mass/M_sun_M_E)**(-4/7)
     c_s_ice = c_s(T, params) #water iceline is defined where T=170K
     return (c/c_s_ice*np.sqrt(G*params.star_mass))**(14/3)
 
 def iceline_visc(t, T, params):
     """Exact calculation using (H/R)_visc = c_s/v_K, with (H/R)_visc from pebble notes"""
-    c = 0.024*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/(0.1*mm_to_au))**(-1/10)*(params.rho_gr/g_cm3_to_M_E_au3)**(-1/10)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)
+    c = 0.019*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/(0.1*mm_to_au))**(-1/10)*(params.rho_gr/g_cm3_to_M_E_au3)**(-1/10)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)*(params.star_mass/M_sun_M_E)**(-7/20)
     c_s_ice = c_s(T, params) # water iceline is defined where T=170K
     return (c/c_s_ice*np.sqrt(G*params.star_mass))**(20/9)
 
@@ -113,6 +120,7 @@ def st_drift_epstein(position, t, params):
     # N.B.: this is in epstein regime
     sigma_gas = sigma_gas_steady_state(position, t, params)
     F = params.Z*M_dot_star(t, params)
+    print("F", F)
 
     return np.sqrt((np.sqrt(3)*params.epsilon_p*F)/(32*np.pi*sigma_gas*position*eta(position, t, params)**2*v_k(position, params)))
 
@@ -137,7 +145,6 @@ def st_frag(position, t, params):
 def st_frag_drift(position, t, params):
     """Returns the minimum between drift and fragmentation"""
     if params.St_const == None:
-
         return np.minimum(st_drift(position, t, params), st_frag(position, t, params))
     else: 
         return params.St_const
@@ -154,7 +161,7 @@ def rho_0 (position, t, sigma_gas, params):
 
 def mfp (position, t, sigma_gas, params):
     """Mean free path of the gas"""
-    return (params.mu*const.m_p.cgs.value/params.cross_sec_H.value)*g_cm2_to_M_E_au2/rho_0(position, t, sigma_gas, params)
+    return (params.mu*const.m_p.cgs.value/params.cross_sec_H)*g_cm2_to_M_E_au2/rho_0(position, t, sigma_gas, params)
 
 def st_from_r_peb(r_peb, position, t, params):
     """relation between stokes number and pebble dimension, both regimes"""
@@ -187,12 +194,19 @@ def M_dot_star_t(t):
     #Time dependent gas accretion rate accordin to Hartmann et al. 2016 (ann.rev.), lower limit
     return 10**(((-1.32)-(1.07)*np.log10(t/yr_to_Myr)))*M_sun_yr_to_M_E_Myr
 
+def M_dot_star_t_Mstar(t, params):
+    """Time and stellar mass dependent accretion rate, Eq. (1) Liu et al. 2019b"""
+    return 10**(-5.12-0.46*np.log10(t/yr_to_Myr)-5.75*np.log10(params.star_mass/M_sun_M_E)+1.17*np.log10(t/yr_to_Myr)*np.log10(params.star_mass/M_sun_M_E))*M_sun_yr_to_M_E_Myr
+
 def M_dot_star(t, params):
     """Gas accretion rate, can be time dependent or constant"""
-    if params.M_dot_star == None:
-        M_dot_star = M_dot_star_t(t)
-    else: 
-        M_dot_star = params.M_dot_star
+    if params.M_dot_star == 0:
+        M_dot_star = M_dot_star_t_Mstar(t, params)
+    else:
+        if params.M_dot_star == None:
+            M_dot_star = M_dot_star_t(t)
+        else: 
+            M_dot_star = params.M_dot_star
 
     return M_dot_star
 
@@ -334,6 +348,7 @@ def H_R_visc_Ida(position, t, params):
 
 def H_R_visc_Liu(position, t, params):
     """Viscous H/r from equation (10) in Liu et al. 2019"""
+    print("opacit ratio", params.disc_opacity/1e-2)
     return 0.034*(params.star_mass/M_sun_M_E)**(-5/16)*(M_dot_star(t, params)/(1e-8*M_sun_yr_to_M_E_Myr))**(1/4)*(params.alpha/1e-2)**(-1/8)*(position)**(-1/16)*(params.disc_opacity/1e-2)**(1/8)
 
 def H_R_visc_Lambrechts(position, t, params):
@@ -380,23 +395,30 @@ def H_peb(St, position, t, params):
 ######### TRANSITION MASSES, ISOLATION MASS, INITIAL MASS #################
 ## maybe needs an update with the Bitsch one!
 def M_peb_iso(position, t, params):
-    """pebble isolation mass according to annual review equations"""
-    return 20 * (H_R(position, t, params) / 0.05)**3 *(params.star_mass/M_sun_M_E)
+    """pebble isolation mass according to Eq. 27 Liu et al. 2019"""
+    return 20 * (H_R(position, t, params) / 0.05)**3 *(params.star_mass/M_sun_M_E)*(1*u.M_earth).value
+ 
+def M_peb_iso_new(position, t, params):
+    """pebble isolation mass according to Eq. 27 Liu et al. 2019"""
+    return 25 * (H_R(position, t, params) / 0.05)**3 *(params.star_mass/M_sun_M_E)*(1*u.M_earth).value
+
+def M_peb_iso_Bitsch_Liu(position, t, params):
+    """pebble isolation mass according to Eq. 26 Liu et al. 2019"""
+    return 25*(H_R(position, t, params)/0.05)**3*(params.star_mass/M_sun_M_E)*(1*u.M_earth).value*(0.34*(-3/np.log10(params.alpha))**4+0.66)*(1-(params.dlnP_dlnR+2.5)/6)*(1*u.M_earth).value
 
 def M_peb_iso_Bitsch(position, t, params):
     """Pebble isolation mass from Bitsch et al. 2018"""
     stokes_peb = st_frag_drift(position, t, params)
 
     #tecnically there is also the diffusion term, equation (26)
-    f_fit = (H_R(position, t, params)/0.05)**3*(0.34*(np.log(0.001)/np.log(params.alpha))**4+0.66)*(1-(params.dlnP_dlnR+2.5)/6)
+    f_fit = ((params.star_mass/M_sun_M_E)*H_R(position, t, params)/0.05)**3*(0.34*(np.log10(0.001)/np.log10(params.alpha))**4+0.66)*(1-(params.dlnP_dlnR+2.5)/6)
     Pi_crit = params.alpha_z/(2*stokes_peb)
     l = 0.00476/f_fit
-    return 25*f_fit* + Pi_crit/l
+    return (25*f_fit + Pi_crit/l)*((1*u.M_earth).value)
 
 def M_Bondi_Hill_trans(position, t, params):
     """3D/2D transition mass according to Ormel review"""
     stokes_peb = st_frag_drift(position, t, params)
-
     return v_hw(position, t, params)**3/(8*G*omega_k(position, params)*stokes_peb)*(4/3)**2
 
 def M_Bondi_Hill_trans_debug(position, t, stokes, params):
@@ -405,34 +427,52 @@ def M_Bondi_Hill_trans_debug(position, t, stokes, params):
 def M_cut(position, t, params):
     """Lower limit for pebble accretion, according to equation (17) in the notes"""
     stokes_peb = st_frag_drift(position, t, params)
-
     return 1e-6*stokes_peb/1e-2*(eta(position, t, params)/1.8e-3)**3
 
 def M_peb_cutoff(position, t, params):
     """Lower limit for pebble accretion, according to equation (17) in the notes"""
     stokes_peb = st_frag_drift(position, t, params)
-
     return 2.5*1e-4*(stokes_peb/0.1)*(eta(position, t, params)/0.002)**3*(params.star_mass)
 
 
 # WARNING I used alpha_z so it could not work when changing alpha across the iceline
 def M_3D_2DH_trans(position, t, params):
-
     stokes_peb = st_frag_drift(position, t, params)
-
     return 3/4*(2*H_peb(stokes_peb, position, t, params)*(np.sqrt(2*np.pi))/np.pi)**3*(omega_k(position, params)**2/(G*stokes_peb))
 
+
 def M_3D_2DB_trans (position, t, params):
-
     stokes_peb = st_frag_drift(position, t, params)
-
     return (8*H_peb(stokes_peb, position, t, params)**2/np.pi)*eta(position, t, params)*omega_k(position, params)**2*position/(G*stokes_peb)
+
+def M_3D_2D_Bondi_new(position, t, params):
+    stokes_peb = st_frag_drift(position, t, params)
+    return 2/np.pi*params.dlnP_dlnR*H_R(position, t, params)**4*params.star_mass*params.alpha_z/(stokes_peb**2)
 
 def M0_pla(position, t, sigma_gas, params):
     """Initial planetesimal mass scaling, according to Liu et al. 2020"""
     f = 400
     f_value = f/400
     return 2e-4*f_value*(H_R(position, t, params)/0.04)**(3/2)*(sigma_gas/(1700*g_cm2_to_M_E_au2))**(3/2)*(position)**3
+
+def M0_pla_Mstar(position, t, sigma_gas, params):
+    """Initial planetesimal mass scaling accordin to Eq. 13 in Liu et al. 2019b """
+    rho_gas =  rho_0 (position, t, sigma_gas, params)
+    if params.self_gravity:
+        gamma=1
+    else:
+        gamma = (4*np.pi*G*rho_gas)/(omega_k(position, params)**2)
+    C = 5e-5
+    a = 0.5
+    b = 0
+    f = 400
+    return 2e-3*(f/400)*(C/5e-5)*(gamma*np.pi)**(a+1)*(H_R(position, t, params)/0.05)**(3+b)*(params.star_mass/(0.1*M_sun_M_E))*(1*u.M_earth).value
+
+def L_star(M_star):
+    """"Stellar luminosity from Fig. 3 Liu et al.2019 for t=1Myr"""
+    #theoretically I should put +0.001 to match the Liu et al boundary conditions
+    return ((M_star/M_sun_M_E)**(3/2))*(const.L_sun.cgs.to(u.au**2*u.M_earth/u.Myr**3).value)#(const.L_sun.cgs.value)*erg_s_to_au_M_E_Myr
+
 
 def pebble_prod_line(time, params):
     """pebble production line according to eq 10 of LJ14"""
@@ -465,7 +505,7 @@ def estimate_initial_step_size(masses, positions, mdot, rdot):
 def planet_counter(simulations, parameters, sim_parameters):
     """Counts the types of planets in the simulation"""
     HJ_counter, WJ_counter, CG_counter, SE_counter, sub_E_counter, terr_in_counter, giant_counter = 0,0,0,0,0,0,0
-
+    model =  parameters[0].H_r_model
     for i in range(len(simulations)):
         sim = simulations[i]
         params = parameters[i]
@@ -493,7 +533,9 @@ def planet_counter(simulations, parameters, sim_parameters):
                     WJ_counter +=1
                 if 2<sim.position[p,m_fin_idx].to(u.au).value<10:
                     CG_counter +=1
-    dict_planets = {'HJ': HJ_counter, 'WJ': WJ_counter, 'CG': CG_counter+1, 'SE': SE_counter, 'sub_E':sub_E_counter,  'terr_in': terr_in_counter, 'terr_tot': terr_in_counter+sub_E_counter,  'giant': giant_counter}
+    
+    dict_planets = {'model': model, 'HJ': HJ_counter, 'WJ': WJ_counter, 'CG': CG_counter+1, 'SE': SE_counter, 'sub_E':sub_E_counter,  'terr_in': terr_in_counter, 'terr_tot': terr_in_counter+sub_E_counter,  'giant': giant_counter}
+    
     return dict_planets
 
 
@@ -556,6 +598,10 @@ def idxs (time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration
 
 def kepler_3_law (period):
     return ((const.G.cgs*const.M_sun.cgs/(4*np.pi**2)*period**2)**(1/3)).to(u.au)
+
+def kepler_3_law_inverse(distance):
+    a_p = (distance*u.au).to(u.cm)
+    return np.sqrt(a_p**3*4*np.pi**2/(const.G.cgs*const.M_sun.cgs))
 
 def radius_mass_exo(radius, rocky = True):
     if rocky:

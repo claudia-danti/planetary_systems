@@ -37,16 +37,16 @@ class Params:
     #stellar parameters 
     star_mass: float = (const.M_sun).to(u.M_earth).value
     star_radius: float = (const.R_sun).to(u.au).value
-    star_luminosity: float = (const.L_sun.cgs).value *erg_s_to_au_M_E_Myr
+    star_luminosity: float = field(init=False)  # Will be set in __post_init__  # (const.L_sun.cgs).value *erg_s_to_au_M_E_Myr
     star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1*u.G 1
-    M_dot_star: Optional[float] = None #1e-8*const.M_sun.cgs/((1*u.yr).to(u.s))
+    M_dot_star: Optional[float] = None #None for Liu et al. 2020, 0 for Hartmann et al. 2016
 
     #disc parameters
     iso_filtering: float = 1
     tau_disc: float= (3 * u.Myr).value
     disc_opacity: float = 1e-2
     Z: float = 0.01 
-    alpha: float = 1e-3
+    alpha: float = 1e-2
     alpha_frag: float = 1e-4
     alpha_frag_out: float = 1e-4
     alpha_frag_in: float = 10*alpha_frag_out
@@ -63,7 +63,7 @@ class Params:
     a_gr: u.Quantity  = (0.1*u.mm).to(u.au).value
     rho_gr: u.Quantity  = (1*u.g/u.cm**3).to(u.M_earth/u.au**3).value
     mu: float = 2.34 #mean molecular weight
-    cross_sec_H: float = 2e-15*u.cm**2 #collisional cross section of H2
+    cross_sec_H: u.Quantity = (2e-15*u.cm**2).value #collisional cross section of H2
     kappa: u.Quantity = (0.005*u.m**2/u.kg).to(u.au**2/u.M_earth).value #envelope opacity
     beta0: float = (500 * u.g / u.cm**2).to(u.earthMass / u.au**2).value #surface density of the envelope
     epsilon_p: float = 0.5
@@ -73,6 +73,11 @@ class Params:
     iceline_flux_change: bool = False
     resonance_trapping: bool = True
     gas_accretion: bool = True
+    self_gravity: bool = False
+
+    def __post_init__(self):
+        # Set star_luminosity as a function of star_mass
+        self.star_luminosity = L_star(self.star_mass)
 
     def update_alpha_z_iceline(self, pos, iceline_radius):
         if pos < iceline_radius:
@@ -85,7 +90,6 @@ class Params:
             self.alpha_frag = self.alpha_frag_in
         else:
             self.alpha_frag = self.alpha_frag_out
-
 
 
 @dataclass
@@ -454,9 +458,9 @@ def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params, o
     os.makedirs(output_folder, exist_ok=True)
 
     # Construct file paths
-    sim_filename = os.path.join(output_folder, 'simulation_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'.json')
-    sim_params_filename = os.path.join(output_folder, 'sim_params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'.json')
-    params_filename = os.path.join(output_folder, 'params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'.json')
+    sim_filename = os.path.join(output_folder, 'simulation_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'.json')
+    sim_params_filename = os.path.join(output_folder, 'sim_params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'.json')
+    params_filename = os.path.join(output_folder, 'params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'.json')
 
     # Write the result to JSON files
     with open(sim_filename, 'w') as file:
