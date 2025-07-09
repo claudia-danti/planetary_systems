@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import astropy.units as u
@@ -38,9 +38,9 @@ class Params:
     star_mass: float = (const.M_sun).to(u.M_earth).value
     star_radius: float = (const.R_sun).to(u.au).value
     star_luminosity: float = field(init=False)  # Will be set in __post_init__  # (const.L_sun.cgs).value *erg_s_to_au_M_E_Myr
-    star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1*u.G 1
-    M_dot_star: Optional[float] = None #None for Liu et al. 2020, 0 for Hartmann et al. 2016
-
+    star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1kG
+    M_dot_gas_star: Optional[Union[float, str]] = "Liu_2019"
+    
     #disc parameters
     iso_filtering: float = 1
     tau_disc: float= (3 * u.Myr).value

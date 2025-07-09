@@ -9,6 +9,7 @@ import pandas as pd
 # times -> Myr
 # lengths -> au
 G = (const.G.cgs.to(u.au**3 / (u.M_earth * u.Myr**2))).value #approx 1e8
+R_sun_au = (const.R_sun.cgs.to(u.au)).value
 M_sun_M_E = (const.M_sun.to(u.M_earth)).value
 L_sun_au_M_E_Myr = (const.L_sun.cgs).to(u.au**2*u.M_earth/u.Myr**3).value
 M_sun_yr_to_M_E_Myr = (1*u.M_sun/u.yr).to(u.M_earth/u.Myr).value #approx 3e12
@@ -21,6 +22,7 @@ k_B = const.k_B.to(u.m**2*u.kg/u.s**2/u.K).value
 kg_to_M_E = (1*u.kg).to(u.M_earth).value
 s_to_Myr = (1*u.s).to(u.Myr).value
 erg_s_to_au_M_E_Myr = (1*u.erg/u.s).to(u.au**2*u.M_earth/u.Myr**3).value
+kpc_to_au = (1*u.kpc).to(u.au).value
 
 @u.quantity_input
 
@@ -35,6 +37,13 @@ def v_k(position, params):
 def v_hw(position, t, params):
     """Headwind velocity experienced by the pebbles"""
     return eta(position, t, params)*v_k(position, params)
+
+def v_sh(position, mass, t, params):
+    """Shear velocity experienced by the pebbles according to Liu & Ormel 2018"""
+    a_sh_hw = 0.52
+    stokes = st_frag_drift(position, t, params)
+    q = mass/params.star_mass
+    return a_sh_hw*(q*stokes)**(1/3)*v_k(position, params)
 
 def v_H (position, mass, St, params):
     """Hill velocity"""
@@ -75,7 +84,27 @@ def v_r(position, t, St, params):
 def c_s(T, params):
     """Isothermal speed of sound"""
     return np.sqrt(k_B*T/(params.mu*const.m_p.value))*m_s_to_au_Myr
-    
+
+def v_crit_settling(position, mass, t, params):
+    """Critical settling velocity, eq. 23 Ormel & Liu 2018"""
+    stokes = st_frag_drift(position, t, params)
+    return (mass/(params.star_mass*stokes))**(1/3)*v_k(position, params)
+
+def v_circ(position, mass, t, params):
+    """Circular velocity, eq. 10 Liu & Ormel 2018"""
+    q = mass/params.star_mass
+    q_sh_hw = eta(position,t,params)**3/st_frag_drift(position, t, params)
+    return (1+5.7*(q/q_sh_hw))**(-1)*v_hw(position, t, params) + v_sh(position, mass, t, params)
+
+def v_approach(position, mass, t, params):
+    """Pebble approach velocity, circa eq. 29 Ormel & Liu 2018 with my definitions"""
+    return 3/2*omega_k(position, params)*b_H(position, mass, st_frag_drift(position, t, params), params) + v_hw(position, t, params)
+
+def v_peb_app(position, mass, t, params):
+    """Pebble approach velocity for a circular orbit Eq. A.9 Liu & Ormel 2018"""
+    stokes = st_frag_drift(position, t, params)
+    return v_sh(position, mass, t, params)+v_hw(position, t, params)
+
 def T_mid (position, t, params):
     """reverting H/R = c_s / v_K to get T(R)"""
     return (H_R(position, t, params)*v_k(position, params))**2*params.mu*(const.m_p/const.k_B/m_s_to_au_Myr**2)
@@ -84,9 +113,22 @@ def T_MMSN(position, params):
     phi = 0.5
     return (params.star_luminosity*phi/(8*np.pi*const.sigma_sb*kg_to_M_E/s_to_Myr**3*position**2))**(1/4)
 
-def r_magnetic_cavity(t, params):
+def r_magnetic_cavity_old(t, params):
     """Position of the magnetic cavity according to equation (5) of Liu et al. 2017"""
     return (params.star_magnetic_field**4*params.star_radius**12/(4*G*params.star_mass*M_dot_star(t, params)**2))**(1/7)
+
+def r_magnetic_cavity(t, params):
+    """Position of the magnetic cavity according to equation (5) of Liu et al. 2017"""
+    return (params.star_magnetic_field**4*R_star(params)**12/(4*G*params.star_mass*M_dot_star(t, params)**2))**(1/7)
+
+def f_set(position, mass,t, params):
+    """Settling efficiency according to Eq. 24 of Ormel & Liu 2018"""
+    a_set = 0.5
+    return np.exp(-a_set*(v_peb_app(position, mass, t, params)/v_crit_settling(position, mass, t, params))**2)
+
+def R_star(params):
+    """Stellar radius according to Demircan & Kahraman 1991 """
+    return 10**(0.003+ 0.724*np.log10(params.star_mass/M_sun_M_E))*R_sun_au
 
 #### ICELINES #####
 # The iceline are computed where T_midplane = 170 K, based on the 
@@ -197,18 +239,28 @@ def M_dot_star_t(t):
 def M_dot_star_t_Mstar(t, params):
     """Time and stellar mass dependent accretion rate, Eq. (1) Liu et al. 2019b"""
     return 10**(-5.12-0.46*np.log10(t/yr_to_Myr)-5.75*np.log10(params.star_mass/M_sun_M_E)+1.17*np.log10(t/yr_to_Myr)*np.log10(params.star_mass/M_sun_M_E))*M_sun_yr_to_M_E_Myr
+def M_dot_star_linear_scaling(t, params):
+    MdotH16 = M_dot_star_t(t)
+    return MdotH16*(params.star_mass/(1*const.M_sun.cgs.to(u.M_earth).value))
+def M_dot_star_quadratic_scaling(t, params):
+    MdotH16 = M_dot_star_t(t)
+    return MdotH16*(params.star_mass/(1*const.M_sun.cgs.to(u.M_earth).value))**2
 
 def M_dot_star(t, params):
     """Gas accretion rate, can be time dependent or constant"""
-    if params.M_dot_star == 0:
-        M_dot_star = M_dot_star_t_Mstar(t, params)
-    else:
-        if params.M_dot_star == None:
-            M_dot_star = M_dot_star_t(t)
-        else: 
-            M_dot_star = params.M_dot_star
+    if params.M_dot_gas_star == "Liu_2019":
+        """Gas accretion rate according to Liu et al. 2019b, equation (1)"""
+        M_dot_gas = M_dot_star_t_Mstar(t, params)
+    elif params.M_dot_gas_star == "Hartmann_2016":
+        M_dot_gas = M_dot_star_t(t)
+    elif params.M_dot_gas_star == "star_mass_linear":
+        M_dot_gas = M_dot_star_linear_scaling(t, params)
+    elif params.M_dot_gas_star == "star_mass_quadratic":
+        M_dot_gas = M_dot_star_quadratic_scaling(t, params)
+    else: 
+        M_dot_gas = params.M_dot_gas_star
 
-    return M_dot_star
+    return M_dot_gas
 
 ###### GAS SURFACE DENSITIES ############
 def sigma_gas_irr(position, t, params):
@@ -615,3 +667,17 @@ def radius_mass_exo(radius, rocky = True):
 def MMSN (position):
     """Minimum mass solar nebula according to Hayashi 1981"""
     return (1700*(position)**(-3/2)*u.g/u.cm**2).to(u.M_earth/u.au**2)
+
+def R_Einstein(D_s, D_l, params):
+    """Einstein radius according to Eq: 11 Gaudi review"""
+    x = D_l/D_s
+    return 2.85*(params.star_mass/(0.5*M_sun_M_E))**(1/2)*(D_s/8)**(1/2)*(x*(1-x)/0.25)**(1/2)
+
+def Roman_Sensitivity(position):
+    """Roman sensitivity according to Eq. 10 Penny et al. 2019"""
+    alpha = -3.9
+    beta = -1.15
+    gamma = 3.56
+    delta = 0.783
+    epsilon = 0.356
+    return 10**(alpha + beta*np.log10(position)+gamma*np.sqrt(delta**2+(np.log10(position)-epsilon)**2))

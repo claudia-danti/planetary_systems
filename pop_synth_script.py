@@ -24,7 +24,6 @@ color = mpl.colormaps["YlOrRd"].reversed()(np.linspace(0, 0.7, code_gas.sim_para
 
 # disc parameters
 params_dict = {'St_const': None, 
-               'M_dot_star': 0,
                'iceline_radius': None,
                 'alpha': 1e-2,
                 'alpha_z': 1e-4, 
@@ -32,12 +31,14 @@ params_dict = {'St_const': None,
                 'epsilon_el': 1,
                 'epsilon_heat':1,
                 'v_frag': (1 * u.m/u.s).to(u.au/u.Myr).value,
+                'Z': 0.01,
+                'M_dot_gas_star': "Liu_2019",
                 }
 
-star_mass = 1*const.M_sun.to(u.M_earth).value
+star_mass = 0.1*const.M_sun.to(u.M_earth).value
 params = code_gas.Params(**params_dict, H_r_model='irradiated', star_mass=star_mass)
 
-output_folder = 'sims/gas_acc/stellar_masses'
+output_folder = 'sims/gas_acc/stellar_masses/single_planets/liu'
 t_fin = 5 #Myr, end of sim
 N_steps = 10000 #number of steps of the sim 
 
@@ -49,13 +50,11 @@ see_ap0 = 7
 
 # inner embryo
 t0_inner_samples = stats.uniform.rvs(loc=0.1, scale=0.9, size=num_samples, random_state=seed_t0)
-a_p0_inner_samples = stats.loguniform.rvs(1e-1, 1e1, size=num_samples, random_state=see_ap0)
+iceline = iceline(t0_inner_samples, 170, params)
+print("iceline", iceline)
+a_p0_inner_samples = stats.loguniform.rvs(1/10*iceline, 10*iceline, size=num_samples, random_state=see_ap0)
 t0_inner = ([t0_inner_samples] * np.ones(len(a_p0_inner_samples))) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
 
-# outer embryo
-a_p0_outer = np.array([30])
-t0_outer = ([0.2] * np.ones(len(a_p0_outer)) ) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
-m0_outer = M0_pla_Mstar(a_p0_outer, t0_outer, sigma_gas_steady_state(a_p0_outer, t0_outer, params), params)
 
 for  a_p0_in, t0_in in zip(a_p0_inner_samples, t0_inner_samples):
 
@@ -63,9 +62,9 @@ for  a_p0_in, t0_in in zip(a_p0_inner_samples, t0_inner_samples):
     sigma_gas_inner = sigma_gas_steady_state(a_p0_in, t0_in, params)
     m0_in = M0_pla_Mstar(a_p0_in, t0_in, sigma_gas_inner, params)
 
-    a_p0 = np.array([*a_p0_outer, a_p0_in])
-    m_0 = np.array([*m0_outer, m0_in])
-    t0 = np.array([*t0_outer, t0_in])
+    a_p0 = np.array([a_p0_in])
+    m_0 = np.array([m0_in])
+    t0 = np.array([t0_in])
 
     sim_params_dict = {'N_step': N_steps,
                     'm0': m_0,
@@ -78,3 +77,31 @@ for  a_p0_in, t0_in in zip(a_p0_inner_samples, t0_inner_samples):
     gas_acc = peb.GasAccretion()
 
     result = code_gas.simulate_euler(migration = True, filtering = True, peb_acc = peb_acc, gas_acc=gas_acc, params=params, sim_params=sim_params, output_folder=output_folder)
+
+
+# # outer embryo
+# a_p0_outer = np.array([30])
+# t0_outer = ([0.2] * np.ones(len(a_p0_outer)) ) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
+# m0_outer = M0_pla_Mstar(a_p0_outer, t0_outer, sigma_gas_steady_state(a_p0_outer, t0_outer, params), params)
+
+# for  a_p0_in, t0_in in zip(a_p0_inner_samples, t0_inner_samples):
+
+#     #initial conditions: both a_p0 and m0 take the outer planet and one of the inner planets
+#     sigma_gas_inner = sigma_gas_steady_state(a_p0_in, t0_in, params)
+#     m0_in = M0_pla_Mstar(a_p0_in, t0_in, sigma_gas_inner, params)
+
+#     a_p0 = np.array([*a_p0_outer, a_p0_in])
+#     m_0 = np.array([*m0_outer, m0_in])
+#     t0 = np.array([*t0_outer, t0_in])
+
+#     sim_params_dict = {'N_step': N_steps,
+#                     'm0': m_0,
+#                     'a_p0': a_p0,
+#                     't0': t0,
+#                     't_fin': t_fin,
+#                 }
+#     sim_params = code_gas.SimulationParams(**sim_params_dict)
+#     peb_acc = code_gas.PebbleAccretion(simplified_acc=False)
+#     gas_acc = peb.GasAccretion()
+
+#     result = code_gas.simulate_euler(migration = True, filtering = True, peb_acc = peb_acc, gas_acc=gas_acc, params=params, sim_params=sim_params, output_folder=output_folder)

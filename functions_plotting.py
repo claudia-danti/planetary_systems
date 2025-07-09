@@ -339,9 +339,8 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
     if add_ylabel:
         axs.set_ylabel("$M \: [M_{\oplus}]$", size = 25) 
     axs.set_xlabel("r [AU]", size = 25) 
-    axs.set_ylim(1e-9, 7e2)
-    #axs.set_xlim(5e-3, 1e2)
-    axs.set_xlim(1e-2, 2)
+    axs.set_ylim(1e-7, 7e2)
+    axs.set_xlim(5e-3, 1e2)
 
     all_y_ticks(axs, num_ticks=100)
     all_x_ticks(axs, num_ticks=100)
