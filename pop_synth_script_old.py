@@ -29,78 +29,37 @@ params_dict = {'St_const': None,
                 'alpha': 1e-2,
                 'alpha_z': 1e-4, 
                 'alpha_frag': 1e-4, 
-                'epsilon_el': 1e-2,
-                'epsilon_heat':0.5,
+                'epsilon_el': 1,
+                'epsilon_heat':1.,
                 'v_frag': (1 * u.m/u.s).to(u.au/u.Myr).value,
                 'M_dot_gas_star': "star_mass_linear",
-                'iceline_v_frag_change': True,
+                'Z': 0.01,
+                'H_r_model':'irradiated',
                 }
 
 
-# Parameters for the [Fe/H] Gaussian distribution
-mu = -0.07  # Mean [Fe/H]
-sigma = 0.21  # Standard deviation
-num_samples = 1000  # Number of Monte Carlo samples
-# Generate random Z values from a Gaussian distribution
-Fe_H_samples = np.random.normal(mu, sigma, num_samples)
-Z_samples = Fe_H_to_Z(Fe_H_samples)  # Convert Fe/H samples to Z
 
-# random sample initial star masses from the IMF
-which = 'Chabrier2005' #'Kroupa'
-Mstars = np.logspace(-2, 2, num_samples)
-IMF_pdf = np.zeros(num_samples)
-MC_random = np.random.uniform(0, 1, num_samples)
-
-for i in range(0, num_samples):
-    if which == 'Chabrier2005':
-        IMF_pdf[i] = Chabrier_2005_IMF_pdf(Mstars[i])
-    if which == 'Kroupa':
-        IMF_pdf[i] = Kroupa_IMF_pdf(Mstars[i])    
-
-# Assume x is your array (can be linear or log-spaced), pdf is the unnormalized PDF
-dx = np.diff(Mstars)
-dx = np.append(dx, dx[-1])  # Make dx same length as x
-# Compute normalization constant (area under curve)
-area = np.sum(IMF_pdf * dx)
-# Normalize
-IMF_pdf_norm = IMF_pdf / area
-# sample the cdf from the normalized PDF
-IMF_cdf = cumtrapz(IMF_pdf_norm, Mstars, initial=0)
-IMF_cdf /= IMF_cdf[-1]
-mstar_samples = np.interp(MC_random, IMF_cdf, Mstars)
-
-
-# Gaussian distribution of disc lifetime
-mu = 3  # Mean disc lifetime in Myr
-sigma = 0.5  # Standard deviation
-num_samples = 1000  # Number of Monte Carlo samples
-# Generate random tau_disc values from a Gaussian distribution
-tau_disc_samples = np.random.normal(mu, sigma, num_samples)
-
-#star_mass = 0.5*const.M_sun.to(u.M_earth).value
-output_folder = 'sims/gas_acc/stellar_masses/single_planets/linear/irradiated/v_frag/3Myrs_fixedMstar_randomZ/Mstar05_random_Z'
+output_folder = 'sims/gas_acc/stellar_masses/single_planets/linear/irradiated/test'
 t_fin = 3 #Myr, end of sim
 N_steps = 5000 #number of steps of the sim 
-
+num_samples = 1000
 # Number of samples to generate
-seed = 12
-seed_t0 = 9
-see_ap0 = 5
+seed = 42
+seed_t0 = 11
+see_ap0 = 7
 
 # inner embryo
-t0_inner_samples = stats.uniform.rvs(loc=0.1, scale=0.9, size=num_samples, random_state=seed_t0)
+t0_inner_samples = stats.uniform.rvs(loc=0.1, scale=0.9, size=num_samples)
 R_in = 0.1
 R_out = 30
 a_p0_inner_samples = stats.loguniform.rvs(R_in, R_out, size=num_samples, random_state=see_ap0)
 t0_inner = ([t0_inner_samples] * np.ones(len(a_p0_inner_samples))) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
 
+print(a_p0_inner_samples)
+params = code_gas.Params(**params_dict)
 
-for  a_p0_in, t0_in, Z in zip(a_p0_inner_samples, t0_inner_samples, Z_samples):
-    params = code_gas.Params(**params_dict, H_r_model='irradiated', star_mass=0.5*const.M_sun.to(u.M_earth).value, Z = Z)
 
-# for  a_p0_in, t0_in, Z, star_mass in zip(a_p0_inner_samples, t0_inner_samples, Z_samples, mstar_samples ):
-#     params = code_gas.Params(**params_dict, H_r_model='irradiated', star_mass=star_mass*const.M_sun.to(u.M_earth).value, Z = Z)
-#     print("Z", params.Z)
+for  a_p0_in, t0_in in zip(a_p0_inner_samples, t0_inner_samples):
     #initial conditions: both a_p0 and m0 take the outer planet and one of the inner planets
     sigma_gas_inner = sigma_gas_steady_state(a_p0_in, t0_in, params)
     m0_in = M0_pla_Mstar(a_p0_in, t0_in, sigma_gas_inner, params)

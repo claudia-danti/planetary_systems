@@ -67,8 +67,7 @@ color = mpl.colormaps["YlOrRd"].reversed()(np.linspace(0, 0.7, code.sim_params.n
 # sim_irr = code.simulate_euler(migration=False, filtering=False, peb_acc=peb_acc, gas_acc = gas_acc, params=params_irr, sim_params=sim_params_irr, output_folder=output_folder)
 
 
-params_dict = {'St_const': None, 
-                'M_dot_star': None,
+params_dict = {'St_const': 1e-2, 
                 'iceline_radius': None,
                 'alpha': 1e-2,
                 'alpha_z': 1e-4, 
@@ -77,7 +76,7 @@ params_dict = {'St_const': None,
                 'iceline_flux_change': False,
                 'gas_accretion': False
                 }
-t_initial = 0.3
+t_initial = 0.1
 t_final = 5
 a_p0 = np.geomspace(50, 1e-1, num = 50)
 t0= ([t_initial] * np.ones(len(a_p0))) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
@@ -91,19 +90,24 @@ sim_params_dict = {'N_step': 10000,
 
 mstar = np.array([0.1, 0.55, 1.0])*const.M_sun.to(u.M_earth).value
 
-output_folder = 'sims/gas_acc/accretion_maps/stellar_masses_old'
+output_folder = 'sims/gas_acc/accretion_maps/M_dot_star/Liu19'
 t_fin = 5 #Myr, end of sim
 N_steps = 10000 #number of steps of the sim 
 
-params_irr1 = code.Params(**params_dict, H_r_model='irradiated', star_mass=mstar[1])
-params_irr10 = code.Params(**params_dict, H_r_model='irradiated', star_mass=mstar[2])
 peb_acc = code.PebbleAccretion(simplified_acc=False)
 gas_acc = code.GasAccretion()
 
-m0_irr1 = M0_pla_Mstar(a_p0, t_in, sigma_gas_steady_state(a_p0, t_in, params_irr1), params_irr1)
-sim_params_irr1 = code.SimulationParams(**sim_params_dict, m0=m0_irr1)
-m0_irr10 = M0_pla_Mstar(a_p0, t_in, sigma_gas_steady_state(a_p0, t_in, params_irr10), params_irr10)
-sim_params_irr10 = code.SimulationParams(**sim_params_dict, m0=m0_irr10)
+params_irr01 = code.Params(**params_dict, H_r_model='irradiated', star_mass=mstar[0], M_dot_gas_star="Liu_2019")
+m0_irr01 = M0_pla_Mstar(a_p0, t_in, sigma_gas_steady_state(a_p0, t_in, params_irr01), params_irr01)
+sim_params_irr01 = code.SimulationParams(**sim_params_dict, m0=m0_irr01)
+sim_irr01 = code.simulate_euler(migration=False, filtering=False, peb_acc=peb_acc, gas_acc = gas_acc, params=params_irr01, sim_params=sim_params_irr01, output_folder=output_folder)
 
-#sim_irr1 = code.simulate_euler(migration=False, filtering=False, peb_acc=peb_acc, gas_acc = gas_acc, params=params_irr1, sim_params=sim_params_irr1, output_folder=output_folder)
-sim_irr10 = code.simulate_euler(migration=False, filtering=False, peb_acc=peb_acc, gas_acc = gas_acc, params=params_irr10, sim_params=sim_params_irr10, output_folder=output_folder)
+# params_irr055 = code.Params(**params_dict, H_r_model='irradiated', star_mass=mstar[1])
+# m0_irr055 = M0_pla_Mstar(a_p0, t_in, sigma_gas_steady_state(a_p0, t_in, params_irr055), params_irr055)
+# sim_params_irr055 = code.SimulationParams(**sim_params_dict, m0=m0_irr055)
+# sim_irr055 = code.simulate_euler(migration=False, filtering=False, peb_acc=peb_acc, gas_acc = gas_acc, params=params_irr055, sim_params=sim_params_irr055, output_folder=output_folder)
+
+# params_irr1 = code.Params(**params_dict, H_r_model='irradiated', star_mass=mstar[2])
+# m0_irr1 = M0_pla_Mstar(a_p0, t_in, sigma_gas_steady_state(a_p0, t_in, params_irr1), params_irr1)
+# sim_params_irr1 = code.SimulationParams(**sim_params_dict, m0=m0_irr1)
+# sim_irr1 = code.simulate_euler(migration=False, filtering=False, peb_acc=peb_acc, gas_acc = gas_acc, params=params_irr1, sim_params=sim_params_irr1, output_folder=output_folder)

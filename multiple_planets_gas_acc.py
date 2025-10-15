@@ -36,10 +36,10 @@ class SimulationEncoder(json.JSONEncoder):
 class Params:
     #stellar parameters 
     star_mass: float = (const.M_sun).to(u.M_earth).value
-    star_radius: float = (const.R_sun).to(u.au).value
+    star_radius: float = field(init=False)  # Will be set in __post_init__  # float = (const.R_sun).to(u.au).value
     star_luminosity: float = field(init=False)  # Will be set in __post_init__  # (const.L_sun.cgs).value *erg_s_to_au_M_E_Myr
     star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1kG
-    M_dot_gas_star: Optional[Union[float, str]] = "Liu_2019"
+    M_dot_gas_star: Optional[Union[float, str]] = "star_mass_linear" #Hartmann_2016, Liu_2019, star_mass_linear, star_mass_quadratic
     
     #disc parameters
     iso_filtering: float = 1
@@ -56,6 +56,8 @@ class Params:
     iceline_radius: Optional[float] = None
     St_const: Optional[float] = None
     v_frag: float = (1 * u.m/u.s).to(u.au/u.Myr).value
+    v_frag_out: float = (10 * u.m/u.s).to(u.au/u.Myr).value
+    v_frag_in: float = v_frag_out/10
     H_r_model: str = "Lambrechts_mixed"  #4 possible models: Ida_mixed, Liu_mixed, irradiated (flared Ida), flared (Bitsch), flat, Lambrechts_mixed
     dlnP_dlnR: float = -2
     epsilon_el: float = 1e-2
@@ -70,6 +72,7 @@ class Params:
     epsilon_d: float = 0.05
     iceline_alpha_change: bool = False
     iceline_alpha_frag_change: bool = False
+    iceline_v_frag_change: bool = False
     iceline_flux_change: bool = False
     resonance_trapping: bool = True
     gas_accretion: bool = True
@@ -78,6 +81,7 @@ class Params:
     def __post_init__(self):
         # Set star_luminosity as a function of star_mass
         self.star_luminosity = L_star(self.star_mass)
+        self.star_radius = R_star(self.star_mass)
 
     def update_alpha_z_iceline(self, pos, iceline_radius):
         if pos < iceline_radius:
@@ -90,6 +94,12 @@ class Params:
             self.alpha_frag = self.alpha_frag_in
         else:
             self.alpha_frag = self.alpha_frag_out
+
+    def update_v_frag_iceline(self, pos, iceline_radius):
+        if pos < iceline_radius:
+            self.v_frag = self.v_frag_in
+        else:
+            self.v_frag = self.v_frag_out
 
 
 @dataclass
@@ -216,7 +226,10 @@ def evolve_system(
             params.update_alpha_z_iceline(positions[i], iceline(times, 170, params))
         if params.iceline_alpha_frag_change:
             params.update_alpha_frag_iceline(positions[i], iceline(times, 170, params))
-            
+        if params.iceline_v_frag_change:
+            params.update_v_frag_iceline(positions[i], iceline(times, 170, params))
+            print("v_frag planet "+str(positions[i])[:4], params.v_frag*(u.au/u.Myr).to(u.m/u.s))
+             
         if params.iceline_flux_change:
             if params.iceline_radius == None:
                 iceline_radius = iceline(times, 170, params)
@@ -458,9 +471,9 @@ def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params, o
     os.makedirs(output_folder, exist_ok=True)
 
     # Construct file paths
-    sim_filename = os.path.join(output_folder, 'simulation_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'.json')
-    sim_params_filename = os.path.join(output_folder, 'sim_params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'.json')
-    params_filename = os.path.join(output_folder, 'params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'.json')
+    sim_filename = os.path.join(output_folder, 'simulation_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'_Z_'+str(params.Z)+'.json')
+    sim_params_filename = os.path.join(output_folder, 'sim_params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'_Z_'+str(params.Z)+'.json')
+    params_filename = os.path.join(output_folder, 'params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'_Z_'+str(params.Z)+'.json')
 
     # Write the result to JSON files
     with open(sim_filename, 'w') as file:

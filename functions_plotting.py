@@ -1049,8 +1049,8 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
 
         fittedx = np.arange(np.log10(amin)-1,np.log10(amax)+1,0.05)
         fittedline=nroalt(fittedx,nroaltpars)
-        ax.plot(10**fittedx,10**fittedline,'-',color='b',lw=3)
-        ax.text(20,0.17,'$Roman$',color='b',rotation=45)
+        ax.plot(10**fittedx,10**fittedline,'-',color='black',lw=3)
+        ax.text(20,0.17,'$Roman$',color='black',rotation=45)
     if roman_sensitivity:
         ### ROMAN SENSITIVITY CONTOURS
         smap = np.loadtxt('roman_sensitivity/all.magrid.NRO.layout_7f_3_covfac.52.filled') 
@@ -1102,3 +1102,259 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
     # plt.tight_layout()
 
     plt.savefig("figures/roman_sensitivity", dpi=300)
+
+
+def boxes(axs):
+    # #SE
+    axs.fill_betweenx([1, 20], 0.001, 1, color='brown', alpha=0.1)
+    #terrestrial embryo
+    axs.fill_betweenx([0.01, 1], 0.1, 10, color='black', alpha=0.1)
+    # gas giants
+    axs.fill_betweenx([1e2, 6e3], 0.001, 0.1, color='aquamarine', alpha=0.1)
+    axs.fill_betweenx([1e2, 6e3], 0.1, 2, color='gold', alpha=0.1)
+    axs.fill_betweenx([1e2, 6e3], 2, 10, color='purple', alpha=0.1)
+
+
+#observational yields
+def Bonfils13 (axs, legend = True):
+    """Bonfis et al. 2013 for Mstar<0.3M_sun"""
+    # DUBBIO, viene da Pan et al. 2025
+    # x, y corrodinates of the dot and error bars
+    SE_x_bonfis = 0.3 #star mass for the plot
+    SE_y_bonfis = 0.52
+    #asymmetric error bars (values must be positive)
+    xerr_bonfis = np.array([[0.2],[0]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_bonfis = np.array([[0.16], [0.5]]) # Vertical error(lower and upper)
+    axs.errorbar(SE_x_bonfis, SE_y_bonfis, xerr=xerr_bonfis, yerr=yerr_bonfis, fmt='o', color='dodgerblue', capsize = 5,  label='Bonfis et al. 2013')
+    if legend:
+        axs.legend()
+
+    return
+
+#observational yields
+def Sabotta21 (axs, all_stars = False, M_lower_034 = True, M_higher_034=True, SE = True, giants = False, superSE =False,  legend = True, single_legends = False):
+    """Sabotta et al. 2021, SE 1<M<10 M_E, 10<P<100 days = 0.09<a<0.42 AU"""
+    if SE:
+        # all stars 0.1<M<0.6 M_sun (K7.0-M7.0)
+        if all_stars:
+            # x, y corrodinates of the dot and error bars
+            x = 0.4 #star mass for the plot
+            y = 0.97
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.2], [0.3]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.33], [0.42]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, all stars'if single_legends else None)
+        
+
+        # low-mass Mdwarfs M<0.34 M_sun
+        if M_lower_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.55
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.24], [0]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.26], [0.4]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}<0.34 \: M_{\odot}$'if single_legends else None)
+        
+        # high-mass Mdwarfs M>0.34 M_sun
+        if M_higher_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 2.10
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0], [0.26]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.81], [1.13]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}>0.34 \: M_{\odot}$'if single_legends else None)
+
+        if legend:
+            axs.errorbar([], [], xerr=[], yerr=[], color='lightskyblue', capsize = 5, label='Sabotta et al. 2021')
+            axs.legend()
+
+    if giants:
+        # all stars 0.1<M<0.6 M_sun (K7.0-M7.0)
+        if all_stars:
+            # x, y corrodinates of the dot and error bars
+            x = 0.4 #star mass for the plot
+            y = 0.04
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.3], [0.2]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.02], [0.03]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='sandybrown', capsize = 5,  label='Sabotta et al. 2021, all stars'if single_legends else None)
+        
+        # low-mass Mdwarfs M<0.34 M_sun
+        if M_lower_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.08
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.24], [0]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.06], [0]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, uplims=True, fmt='o', color='sandybrown', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}<0.34 \: M_{\odot}$'if single_legends else None)
+        
+        # high-mass Mdwarfs M>0.34 M_sun
+        if M_higher_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.06
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0], [0.26]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.03], [0.04]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='sandybrown', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}>0.34 \: M_{\odot}$'if single_legends else None)
+        
+        if legend:
+            axs.errorbar([], [], xerr=[], yerr=[], color='sandybrown', capsize = 5, label='Sabotta et al. 2021')
+            axs.legend()
+
+
+    if superSE:
+        # all stars 0.1<M<0.6 M_sun (K7.0-M7.0)
+        if all_stars:
+            # x, y corrodinates of the dot and error bars
+            x = 0.4 #star mass for the plot
+            y = 0.10
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.2], [0.4]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.04], [0.05]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, all stars'if single_legends else None)
+        
+        # low-mass Mdwarfs M<0.34 M_sun
+        if M_lower_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.1
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.24], [0]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.08], [0]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, uplims = True, fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}<0.34 \: M_{\odot}$'if single_legends else None)
+        
+        # high-mass Mdwarfs M>0.34 M_sun
+        if M_higher_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.15
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0], [0.26]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.05], [0.7]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}>0.34 \: M_{\odot}$'if single_legends else None)
+        
+        if legend:
+            axs.errorbar([], [], xerr=[], yerr=[], color='lightskyblue', capsize = 5, label='Sabotta et al. 2021')
+            axs.legend()
+
+
+    return
+
+
+def Pinamonti22 (axs,  legend = True):
+    """Pinamonti et al. 2022, Mstar 0.3-0.71 M_sun, 1<M<10 M_earth, 10<P<100 days = 0.09<a<0.42 AU"""
+
+    # x, y corrodinates of the dot and error bars
+    x = 0.5 #star mass for the plot
+    y = 0.82
+    #asymmetric error bars (values must be positive)
+    xerr = np.array([[0.2],[0.21]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr = np.array([[0.21], [0.46]]) # Vertical error(lower and upper)
+    axs.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='o', color='slateblue', capsize = 5,  label='Pinamonti et al. 2022')
+
+    if legend:
+        axs.legend()
+
+    return
+
+
+def Kunimoto20 (axs, F = False, G=True, K=True, SE = True, HJ=False, legend = True, single_legends =False):
+    """Kunimoto et al. 2020"""
+    #SE 1-2.83 R_E = 1-20 M_E, P<200 days = 0.7 AU
+    if SE:
+         # 1.04-1.4 Msun
+        if F:
+            # x, y corrodinates of the dot and error bars
+            x = 1.22
+             #star mass for the plot
+            y = 0.26
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.18], [0.18]])  # Horizontal error 
+            yerr_sabotta = np.array([[0.02], [0.03]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='navy', capsize = 5,  label='Kunimoto et al. 2020, F stars' if single_legends else None)
+        
+        # 0.8-1.04 Msun
+        if G:
+            # x, y corrodinates of the dot and error bars
+            x = 0.92 #star mass for the plot
+            y = 0.67
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.12], [0.12]])  # Horizontal error
+            yerr_sabotta = np.array([[0.05], [0.05]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='navy', capsize = 5,  label='Kunimoto et al. 2020, G stars' if single_legends else None)
+       # 0.45-0.8 Msun
+        if K:
+            # x, y corrodinates of the dot and error bars
+            x = 0.62 #star mass for the plot
+            y = 1.2
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.18], [0.18]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.10], [0.11]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='navy', capsize = 5,  label='Kunimoto et al. 2020, K stars' if single_legends else None)
+
+
+        if legend:
+            axs.errorbar([], [], xerr=[], yerr=[], color='navy', capsize = 5, label='Kunimoto et al. 2020')
+            axs.legend()
+
+    # beyond 20M_E
+    if HJ:
+        # overall for all stars really to be checked
+        x = 0.75 #star mass for the plot
+        y = 0.77
+        
+        #asymmetric error bars (values must be positive)
+        xerr_sabotta = np.array([[0.25], [0.25]])  # Horizontal error 
+        yerr_sabotta = np.array([[0.14], [0.16]])  # Vertical error (lower and upper)
+
+        axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, uplims=True, fmt='o', color='coral', capsize = 5,  label='Kunimoto et al. 2020, K stars')
+
+
+
+    return
+
+
+def Pan25(axs, SE = True, WHG = True, CG =True,legend = True):
+    """Pan et al. 2025, simulations"""
+
+    Mstar = np.array([0.1, 0.3, 0.5, 1])
+    if SE:
+        f_SE = np.array([0.1, 0.45, 0.6, 0.4])
+        axs.plot(Mstar, f_SE, linestyle ='-', color='black', label='Pan et al. 2025')
+    if WHG:
+        f_WHG = np.array([3.5e-3, 0.12, 0.15, 0.155])
+        axs.plot(Mstar, f_WHG, linestyle ='-', color='black', label='Pan et al. 2025')
+
+    if CG:
+        f_CG = np.array([1e-3,3e-2, 0.1, 2.8e-1])
+        axs.plot(Mstar, f_CG, linestyle ='-', color='black', label='Pan et al. 2025')
+
+    return

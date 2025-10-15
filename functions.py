@@ -4,6 +4,7 @@ import astropy.constants as const
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import pandas as pd
+import scipy.integrate as integrate
 ### UNITS AND CONVERSIONS ######
 # masses -> earth masses
 # times -> Myr
@@ -119,16 +120,16 @@ def r_magnetic_cavity_old(t, params):
 
 def r_magnetic_cavity(t, params):
     """Position of the magnetic cavity according to equation (5) of Liu et al. 2017"""
-    return (params.star_magnetic_field**4*R_star(params)**12/(4*G*params.star_mass*M_dot_star(t, params)**2))**(1/7)
+    return (params.star_magnetic_field**4*R_star(params.star_mass)**12/(4*G*params.star_mass*M_dot_star(t, params)**2))**(1/7)
 
 def f_set(position, mass,t, params):
     """Settling efficiency according to Eq. 24 of Ormel & Liu 2018"""
     a_set = 0.5
     return np.exp(-a_set*(v_peb_app(position, mass, t, params)/v_crit_settling(position, mass, t, params))**2)
 
-def R_star(params):
+def R_star(M_star):
     """Stellar radius according to Demircan & Kahraman 1991 """
-    return 10**(0.003+ 0.724*np.log10(params.star_mass/M_sun_M_E))*R_sun_au
+    return 10**(0.003+ 0.724*np.log10(M_star/M_sun_M_E))*R_sun_au
 
 #### ICELINES #####
 # The iceline are computed where T_midplane = 170 K, based on the 
@@ -508,7 +509,7 @@ def M0_pla(position, t, sigma_gas, params):
     return 2e-4*f_value*(H_R(position, t, params)/0.04)**(3/2)*(sigma_gas/(1700*g_cm2_to_M_E_au2))**(3/2)*(position)**3
 
 def M0_pla_Mstar(position, t, sigma_gas, params):
-    """Initial planetesimal mass scaling accordin to Eq. 13 in Liu et al. 2019b """
+    """Initial planetesimal mass scaling accordin to Eq. 14 in Liu et al. 2019b """
     rho_gas =  rho_0 (position, t, sigma_gas, params)
     if params.self_gravity:
         gamma=1
@@ -525,7 +526,71 @@ def L_star(M_star):
     #theoretically I should put +0.001 to match the Liu et al boundary conditions
     return ((M_star/M_sun_M_E)**(3/2))*(const.L_sun.cgs.to(u.au**2*u.M_earth/u.Myr**3).value)#(const.L_sun.cgs.value)*erg_s_to_au_M_E_Myr
 
+def Kroupa_IMF_pdf(M_star):
+    """Kroupa IMF, equation (7) in Maschberger 2013, normalised between 0.01 and 150 solar masses"""
+    k0=1
+    m1 = 0.08
+    k1 = k0*m1**(-0.3+1.3)
+    m2 = 0.5
+    k2 = k1*m2**(-1.3+2.3)
+    # compute global normalization constant A
+    A = 1.9870262205957314 #obtained setting the integral of the pdf to 1 between 0.01 and 150 solar masses
+    if M_star< 0.01:
+        return 0
+    elif M_star> 0.01 and M_star < 0.08:
+        return A*k0*M_star**(-0.3)
+    elif M_star> 0.08 and M_star < 0.5:
+        return A*k1*M_star**(-1.3)
+    elif M_star >= 0.5 and M_star < 150:
+        return A*k2*M_star**(-2.3)
+    else:
+        return 0
 
+def Kroupa_IMF_cdf(M_star):
+    """Kroupa IMF, equation (7) in Maschberger 2013, normalised between 0.01 and 150 solar masses"""
+    k0=1
+    m1 = 0.08
+    k1 = k0*m1**(-0.3+1.3)
+    m2 = 0.5
+    k2 = k1*m2**(-1.3+2.3)
+    # compute global normalization constant A
+    A = 1.9870262205957314 #obtained setting the integral of the pdf to 1 between 0.01 and 150 solar masses
+    if M_star< 0.01:
+        return 0
+    elif M_star> 0.01 and M_star < 0.08:
+        return A*k0/0.7*(M_star**(0.7)-0.01**(0.7))
+    elif M_star> 0.08 and M_star < 0.5:
+        return A*k0/0.7*(0.08**(0.7)-0.01**(0.7))-A*k1/0.3*(M_star**(-0.3)-0.08**(-0.3))
+    elif M_star >= 0.5 and M_star < 150:
+        return A*k0/0.7*(0.08**(0.7)-0.01**(0.7))-A*k1/0.3*(0.5**(-0.3)-0.08**(-0.3))-A*k2/1.3*(M_star**(-1.3)-0.5**(-1.3))
+    else:
+        return 0
+
+def Chabrier_IMF_pdf(M_star):
+    """Chabrier IMF, equation (8) in Maschberger 2013"""
+
+    k1 = 0.158
+    k2 = 0.0443
+
+    if M_star<=1:
+        return k1/M_star*np.exp(-1/2*((np.log10(M_star)-np.log10(0.079))/0.69)**2)
+    else:
+        return k2*M_star**(-2.3)
+
+def Chabrier_2003_IMF_pdf(M_star):
+    """Chabrier IMF, Romano et al., cut at 0.1 M_sun"""
+    if M_star<=1:
+        return 1.16*np.exp(-((np.log10(M_star)-np.log10(0.079))**2/(2*0.69)**2))
+    else:
+        return 0.32*M_star**(-1.6)
+
+def Chabrier_2005_IMF_pdf(M_star):
+    """Chabrier IMF, Chabrier et al. 2005, eq. 1"""
+    if M_star<=1:
+        return 0.093*np.exp(-((np.log10(M_star)-np.log10(0.2))**2/(2*0.55**2)))
+    else:
+        return 0.041*M_star**(-1.65)
+    
 def pebble_prod_line(time, params):
     """pebble production line according to eq 10 of LJ14"""
 
@@ -554,20 +619,24 @@ def estimate_initial_step_size(masses, positions, mdot, rdot):
     return initial_step_size
 
 
-def planet_counter(simulations, parameters, sim_parameters):
+def planet_counter(simulations, parameters, sim_parameters, outer = False):
     """Counts the types of planets in the simulation"""
-    HJ_counter, WJ_counter, CG_counter, SE_counter, sub_E_counter, terr_in_counter, giant_counter = 0,0,0,0,0,0,0
+    HJ_counter, WJ_counter, CG_counter, SE_counter, sub_E_counter, sub_giants_in_counter, sub_giants_out_counter, terr_in_counter, giant_counter, tot_planets_counter = 0,0,0,0,0,0,0, 0
+    print("parameter",len(parameters))
     model =  parameters[0].H_r_model
     for i in range(len(simulations)):
         sim = simulations[i]
         params = parameters[i]
         sim_params = sim_parameters[i]
-
-        for p in range(1,sim_params.nr_planets):
+        if outer:
+            first_planet = 1
+        else:
+            first_planet = 0
+        for p in range(first_planet, sim_params.nr_planets):
             idx = idxs (sim.time[p], sim.mass[p], sim.position[p], sim.filter_fraction[p], 
                             sim.dR_dt[p], sim.dM_dt[p], params, True)
             stop_mig_idx = idx['stop_mig_idx'].values[0]
-
+            tot_planets_counter +=1
             m_fin_idx = stop_mig_idx
 
             if 1<sim.mass[p,m_fin_idx].to(u.M_earth).value<20 and sim.position[p,m_fin_idx].to(u.au).value<1:
@@ -577,6 +646,12 @@ def planet_counter(simulations, parameters, sim_parameters):
                     terr_in_counter +=1    
                 else:
                     sub_E_counter +=1
+            if 20<sim.mass[p,m_fin_idx].to(u.M_earth).value<100:
+                if sim.position[p,m_fin_idx].to(u.au).value<1:
+                    sub_giants_in_counter +=1
+                else:
+                    sub_giants_out_counter +=1
+
             if sim.mass[p,m_fin_idx].to(u.M_earth).value>=100:
                 giant_counter += 1
                 if 0.01<sim.position[p,m_fin_idx].to(u.au).value<0.1:
@@ -586,7 +661,10 @@ def planet_counter(simulations, parameters, sim_parameters):
                 if 2<sim.position[p,m_fin_idx].to(u.au).value<10:
                     CG_counter +=1
     
-    dict_planets = {'model': model, 'HJ': HJ_counter, 'WJ': WJ_counter, 'CG': CG_counter+1, 'SE': SE_counter, 'sub_E':sub_E_counter,  'terr_in': terr_in_counter, 'terr_tot': terr_in_counter+sub_E_counter,  'giant': giant_counter}
+    dict_planets = {'model': model, 'HJ': HJ_counter, 'WJ': WJ_counter, 'CG': CG_counter, 'SE': SE_counter, 
+                    'sub_E':sub_E_counter, 'sub_giants_in':sub_giants_out_counter,'sub_giants_out':sub_giants_out_counter,
+                    'sub_giants': sub_giants_in_counter+sub_giants_out_counter, 'terr_in': terr_in_counter, 
+                    'terr_tot': terr_in_counter+sub_E_counter,  'giant': giant_counter, 'tot_planets': tot_planets_counter}
     
     return dict_planets
 
@@ -660,7 +738,7 @@ def radius_mass_exo(radius, rocky = True):
         rho = 5.5* u.g/u.cm**3
     else:
         rho = 1* u.g/u.cm**3
-    return 4/3*np.pi*radius**3*rho
+    return (4/3*np.pi*radius**3*rho).to(u.M_earth)
 
 
 
@@ -681,3 +759,13 @@ def Roman_Sensitivity(position):
     delta = 0.783
     epsilon = 0.356
     return 10**(alpha + beta*np.log10(position)+gamma*np.sqrt(delta**2+(np.log10(position)-epsilon)**2))
+
+def Z_to_Fe_H (Z):
+    """Fe/H to Z relation according to Burn 2021"""
+    f_dtf_solar = 0.0149 #Lodders 2003
+    return np.log10(Z/f_dtf_solar)
+
+def Fe_H_to_Z (Fe_H):
+    """Z to Fe/H relation according to Burn 2021"""
+    f_dtf_solar = 0.0149 #Lodders 2003
+    return f_dtf_solar*10**Fe_H
