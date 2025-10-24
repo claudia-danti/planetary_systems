@@ -1,1 +1,3 @@
 # planetary_systems
+This repository contains the code that i developed during my PhD in Astrophysics at the University of Copnehagen to simulate the growth and evolution of a multi-planetary system.
+The code is a 1D semi-analytical pebble accretion model for planet formation. It is able to simulate the growth and migration of $n$ planets (embryos are to be inserted as a starting condition), considering pebble and drift limited size pebbles, mutual pebble filtering between planets, gas accretion and type I and II migration. The disc model can be chose between fully irradiated and viscoulsy heated + irradiated
