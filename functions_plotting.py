@@ -1106,11 +1106,11 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
 
 def boxes(axs):
     # #SE
-    axs.fill_betweenx([1, 20], 0.001, 1, color='brown', alpha=0.1)
+    axs.fill_betweenx([1, 20], 0.01, 1, color='brown', alpha=0.1)
     #terrestrial embryo
     axs.fill_betweenx([0.01, 1], 0.1, 10, color='black', alpha=0.1)
     # gas giants
-    axs.fill_betweenx([1e2, 6e3], 0.001, 0.1, color='aquamarine', alpha=0.1)
+    axs.fill_betweenx([1e2, 6e3], 0.01, 0.1, color='aquamarine', alpha=0.1)
     axs.fill_betweenx([1e2, 6e3], 0.1, 2, color='gold', alpha=0.1)
     axs.fill_betweenx([1e2, 6e3], 2, 10, color='purple', alpha=0.1)
 

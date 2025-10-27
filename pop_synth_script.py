@@ -38,7 +38,7 @@ params_dict = {'St_const': None,
 
 
 # Parameters for the [Fe/H] Gaussian distribution
-mu = -0.07  # Mean [Fe/H]
+mu = 0.07  # Mean [Fe/H]
 sigma = 0.21  # Standard deviation
 num_samples = 1000  # Number of Monte Carlo samples
 # Generate random Z values from a Gaussian distribution
@@ -78,9 +78,9 @@ num_samples = 1000  # Number of Monte Carlo samples
 tau_disc_samples = np.random.normal(mu, sigma, num_samples)
 
 #star_mass = 0.5*const.M_sun.to(u.M_earth).value
-output_folder = 'sims/gas_acc/stellar_masses/single_planets/linear/irradiated/v_frag/3Myrs_fixedMstar_randomZ/Mstar05_random_Z'
-t_fin = 3 #Myr, end of sim
-N_steps = 5000 #number of steps of the sim 
+output_folder = 'sims/gas_acc/stellar_masses/single_planets/linear/surfheat/lowres/Fe_H_07/5Myrs_randomMstar_randomZ'
+t_fin = 5 #Myr, end of sim
+N_steps = 500 #number of steps of the sim 
 
 # Number of samples to generate
 seed = 12
@@ -95,12 +95,12 @@ a_p0_inner_samples = stats.loguniform.rvs(R_in, R_out, size=num_samples, random_
 t0_inner = ([t0_inner_samples] * np.ones(len(a_p0_inner_samples))) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
 
 
-for  a_p0_in, t0_in, Z in zip(a_p0_inner_samples, t0_inner_samples, Z_samples):
-    params = code_gas.Params(**params_dict, H_r_model='irradiated', star_mass=0.5*const.M_sun.to(u.M_earth).value, Z = Z)
+# for  a_p0_in, t0_in, Z in zip(a_p0_inner_samples, t0_inner_samples, Z_samples):
+#     params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=0.1*const.M_sun.to(u.M_earth).value, Z = Z)
 
-# for  a_p0_in, t0_in, Z, star_mass in zip(a_p0_inner_samples, t0_inner_samples, Z_samples, mstar_samples ):
-#     params = code_gas.Params(**params_dict, H_r_model='irradiated', star_mass=star_mass*const.M_sun.to(u.M_earth).value, Z = Z)
-#     print("Z", params.Z)
+for  a_p0_in, t0_in, Z, star_mass in zip(a_p0_inner_samples, t0_inner_samples, Z_samples, mstar_samples ):
+    params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=star_mass*const.M_sun.to(u.M_earth).value, Z = Z)
+    print("Z", params.Z)
     #initial conditions: both a_p0 and m0 take the outer planet and one of the inner planets
     sigma_gas_inner = sigma_gas_steady_state(a_p0_in, t0_in, params)
     m0_in = M0_pla_Mstar(a_p0_in, t0_in, sigma_gas_inner, params)

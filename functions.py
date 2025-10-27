@@ -621,13 +621,15 @@ def estimate_initial_step_size(masses, positions, mdot, rdot):
 
 def planet_counter(simulations, parameters, sim_parameters, outer = False):
     """Counts the types of planets in the simulation"""
-    HJ_counter, WJ_counter, CG_counter, SE_counter, sub_E_counter, sub_giants_in_counter, sub_giants_out_counter, terr_in_counter, giant_counter, tot_planets_counter = 0,0,0,0,0,0,0, 0
+    HJ_counter, WJ_counter, CG_counter, SE_counter, sub_E_counter, sub_giants_in_counter, sub_giants_out_counter, terr_in_counter, giant_counter, tot_planets_counter = 0,0,0,0,0,0,0,0,0,0
+    star_mass = []
     print("parameter",len(parameters))
     model =  parameters[0].H_r_model
     for i in range(len(simulations)):
         sim = simulations[i]
         params = parameters[i]
         sim_params = sim_parameters[i]
+        star_mass.append(params.star_mass)
         if outer:
             first_planet = 1
         else:
@@ -664,7 +666,7 @@ def planet_counter(simulations, parameters, sim_parameters, outer = False):
     dict_planets = {'model': model, 'HJ': HJ_counter, 'WJ': WJ_counter, 'CG': CG_counter, 'SE': SE_counter, 
                     'sub_E':sub_E_counter, 'sub_giants_in':sub_giants_out_counter,'sub_giants_out':sub_giants_out_counter,
                     'sub_giants': sub_giants_in_counter+sub_giants_out_counter, 'terr_in': terr_in_counter, 
-                    'terr_tot': terr_in_counter+sub_E_counter,  'giant': giant_counter, 'tot_planets': tot_planets_counter}
+                    'terr_tot': terr_in_counter+sub_E_counter,  'giant': giant_counter, 'tot_planets': tot_planets_counter, 'star_mass': star_mass}
     
     return dict_planets
 
@@ -749,6 +751,7 @@ def MMSN (position):
 def R_Einstein(D_s, D_l, params):
     """Einstein radius according to Eq: 11 Gaudi review"""
     x = D_l/D_s
+    print(x)
     return 2.85*(params.star_mass/(0.5*M_sun_M_E))**(1/2)*(D_s/8)**(1/2)*(x*(1-x)/0.25)**(1/2)
 
 def Roman_Sensitivity(position):
@@ -769,3 +772,24 @@ def Fe_H_to_Z (Fe_H):
     """Z to Fe/H relation according to Burn 2021"""
     f_dtf_solar = 0.0149 #Lodders 2003
     return f_dtf_solar*10**Fe_H
+
+
+def s_w(q):
+    """Boundary for cloed topology, Dominik 1999"""
+    return (1+q**(1/3)/2)
+
+def s_c(q):
+    """Boundary for open topology, Dominik 1999"""
+    return (1-3*q**(1/3)/4)
+
+def lensing_triangle(q):
+    """Lensing zone triangle boundaries for a high-magnification event, Gould et al. 2010, equation  2"""
+    #returns array with s_minus and s_plus
+    eta = 0.32
+    xi = 1/50
+    Amax = 3000
+    q_min = xi/Amax
+    s_plus = np.exp(eta*np.log(q/q_min))
+    s_minus = np.exp (-eta*np.log(q/q_min))
+    s = np.array([s_minus, s_plus])
+    return s
