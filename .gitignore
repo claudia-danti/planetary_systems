@@ -1,5 +1,6 @@
-# figures folder
+# figures folder and sims folder
 figures/
+sims/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

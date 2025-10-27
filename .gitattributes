@@ -1,0 +1,2 @@
+# filter-out the output when pushing jupyter notebooks
+*.ipynb filter=strip-notebook-output

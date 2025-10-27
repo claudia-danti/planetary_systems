@@ -21,14 +21,15 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
     #Creates the index dictionary
 
     idx_or_last = lambda fltr: np.argmax(fltr) if np.any(fltr) else fltr.size
-    isolation_mass = M_peb_iso(position, time, params)
+    isolation_mass = M_peb_iso(position.value, time.value, params)
     stop_idx = np.argmin(position) #returns the position of the min value of position
     stop_mass_idx = np.any(np.where(dM_dt == 0)[0][0]) if np.any(np.where(dM_dt == 0)[0]) else dM_dt.size
-
-    isolation_idx = np.where(mass > isolation_mass)[0]
-    if isolation_idx.size > 0:
-        isolation_idx = isolation_idx[0]
+    iso_idx = np.argmax(mass.value > isolation_mass)
+    
+    if iso_idx !=0:
+        isolation_idx = iso_idx
     else:
+        #print("iso index = mass size")
         isolation_idx = mass.size
 
     if migration:
@@ -39,7 +40,7 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
             stop_mig_idx = len(dR_dt) - 1  # or some other default value
         # Returns the position of the first time for which r < r_mag
         #returns the position of the first time for which r<r_mag 
-        inner_edge_idx = idx_or_last(position < r_magnetic_cavity(time, params))
+        inner_edge_idx = idx_or_last(position.value < r_magnetic_cavity(time.value, params))
         if stop_idx < inner_edge_idx:
             coll_or_res_idx = stop_idx
             end_idx = min(inner_edge_idx, coll_or_res_idx)
@@ -49,6 +50,13 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
             end_idx = inner_edge_idx
 
     else:
+        
+        # only because otherwise the dict complains
+        inner_edge_idx = r_magnetic_cavity(time.value, params)
+        coll_or_res_idx = -1
+        end_idx = -1
+        stop_mig_idx = -1
+        #####
         if isolation_idx < mass.size:
             death_idx = isolation_idx
         else:
@@ -161,10 +169,10 @@ def plot_mass(axs, sim, params, sim_params, migration, color, **kwargs):
 
 def plot_filter_frac(axs, sim, params, sim_params, migration, **kwargs):
     """Plots the filtering fraction vs time of the simulated set of planets, possible migration"""
+    for p in [-1]:
+    #for p in range(sim_params.nr_planets-1,-1,-1):
 
-    for p in range(sim_params.nr_planets-1,-1,-1):
-
-        idx_df = idxs (axs, sim.time, sim.mass[p], sim.position[p], sim.filter_fraction[p], sim.dR_dt[p], params, migration, **kwargs)
+        idx_df = idxs (axs, sim.time, sim.mass[p], sim.position[p], sim.filter_fraction[p], sim.dR_dt[p], sim.dM_dt[p], params, migration, **kwargs)
         isolation_idx = idx_df['isolation_idx'].values[0]
         inner_edge_idx = idx_df['inner_edge_idx'].values[0]
         saturation_idx = idx_df['saturation_idx'].values[0]
@@ -173,19 +181,19 @@ def plot_filter_frac(axs, sim, params, sim_params, migration, **kwargs):
         end_idx = idx_df['end_idx'].values[0]
         stop_mig_idx = idx_df['stop_mig_idx'].values[0]
 
-        if 1 in sim.filter_fraction:
+        if 1 in sim.filter_fraction[p]:
             # checking that we reach 1 before isolation mass
             if saturation_idx < isolation_idx:
                 axs.scatter(sim.time[p,saturation_idx].to(u.yr), (sim.filter_fraction[p,saturation_idx])*100, marker = '*', **kwargs)
 
-        if isolation_idx < sim.mass.size:
-            axs.scatter(sim.time[p,isolation_idx+1].to(u.yr), (sim.filter_fraction[p,isolation_idx+1])*100, color = 'black', zorder =3)
+        if isolation_idx < sim.mass[p].size:
+            axs.scatter(sim.time[isolation_idx+1].to(u.yr), (sim.filter_fraction[p,isolation_idx+1])*100, color = 'black', zorder =3)
 
         #mask = filter_fraction[i,:] != 0 # gets rid of the 0 values of the filter fraction once the planet dies in the star
-        axs.plot(sim.time*u.s.to(u.yr), (sim.filter_fraction)*100, **kwargs)
-    axs.axvline(x = 1e7, linestyle="--", color = "grey", zorder = 0)
+        axs.plot(sim.time.to(u.yr), (sim.filter_fraction[p])*100, **kwargs)
+    #axs.axvline(x = 1e7, linestyle="--", color = "grey", zorder = 0)
     axs.autoscale(enable=True, axis='x', tight=True)
-    axs.axhline(y = 50, color = "grey")
+    #axs.axhline(y = 50, color = "grey")
     #axs.axvspan((3*u.Myr).to(u.yr).value, (20*u.Myr).to(u.yr).value, alpha = 0.05, color = "grey")
 
     axs.tick_params(axis = "both", length = 5, which = "minor")
@@ -194,7 +202,7 @@ def plot_filter_frac(axs, sim, params, sim_params, migration, **kwargs):
     axs.set_xlabel("t [yrs]", size = 15)
     axs.set_xscale("log")
     axs.legend()
-    axs.set_xlim(9e4, 2e7)
+    axs.set_xlim(9e4, 1e7)
 
 
 ### WARNING: the isolation mass is the one at the final simulation, but beware that the viscously heated H/R depends on the time through M_dot
@@ -257,74 +265,85 @@ def plot_growth_track_timescale(fig, axs, sim, params, sim_params,  migration, c
         stop_mig_idx = idx_df['stop_mig_idx'].values[0]
         stop_mass_idx = idx_df['stop_mass_idx'].values[0]
         pos = np.geomspace(1e-2,200, num=sim_params.N_step+1)
-        norm=mpl.colors.LogNorm(vmin = (1e5*u.yr).to(u.Myr).value, vmax = (3e6*u.yr).to(u.Myr).value)
-        print('planet '+str(sim_params.a_p0[p].to(u.au))+" iso mass at ", sim.time[isolation_idx].to(u.Myr) if isolation_idx < sim.mass[p].size else "no iso, end of sim")
+        norm=mpl.colors.LogNorm(vmin = sim_params.t_in, vmax = sim_params.t_fin)
+        print('planet '+str(sim_params.a_p0[p]*(u.au))+" iso mass at ", sim.time[isolation_idx].to(u.Myr) if isolation_idx < sim.mass[p].size else "no iso, end of sim")
         #print('inner', inner_edge_idx)
         #plot the growth track with color coding gven by the time it takes to grow
         #scatter grey points after they reach isolation mass
-        sc_post_iso = axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_mig_idx], sim.mass[p,isolation_idx:stop_mig_idx].to(u.earthMass), color='grey', linewidth=6, alpha = 0.1)
 
-        axs.scatter(sim.position[p,stop_mig_idx].to(u.au), sim.mass[p,stop_mig_idx].to(u.earthMass), marker = 'x', color = 'grey', s = 100, zorder=100)
-        
         if nofilter:
-            axs.loglog(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9, zorder =1)
-            axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_idx], sim.mass[p,isolation_idx:stop_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9, zorder =1)
 
-        if isolation_idx < sim.mass[p].size:
-            dt= (sim.time[:isolation_idx]).to(u.Myr)
+            sc_post_iso = axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_mig_idx], sim.mass[p,isolation_idx:stop_mig_idx].to(u.earthMass), color='grey', linewidth=6, alpha = 0.1)
+            axs.scatter(sim.position[p,stop_mig_idx].to(u.au), sim.mass[p,stop_mig_idx].to(u.earthMass), marker = 'x', color = 'grey', s = 100, zorder=100)
+            if p!=0:
+                axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_mig_idx], sim.mass[p,isolation_idx:stop_mig_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9)
 
-            sc = axs.scatter(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
-
-            axs.scatter(sim.position.to(u.au)[p,isolation_idx], sim.mass[p,isolation_idx].to(u.earthMass), color = 'black', s = 150, zorder = 100)
-        else: 
-            dt= (sim.time[:stop_mig_idx]).to(u.Myr)
-
-            sc = axs.scatter(sim.position.to(u.au)[p,:stop_mig_idx], sim.mass[p,:stop_mig_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
-
-            #axs.scatter(sim.position.to(u.au)[-1],sim.mass[-1].to(u.earthMass), marker = 'x', color = 'grey',s = 100, zorder=100)
-
-        #if 1 in sim.filter_fraction:
-            #axs.scatter(sim.position[p,saturation_idx].to(u.au), (sim.mass[p,saturation_idx].to(u.earthMass)), marker = '*', color = 'black')
+            if isolation_idx < sim.mass[p].size:
+                dt= (sim.time[:isolation_idx]).to(u.Myr)
+                sc = axs.scatter(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
+                axs.scatter(sim.position.to(u.au)[p,isolation_idx], sim.mass[p,isolation_idx].to(u.earthMass), color = 'black', s = 150, zorder = 100)
+            else: 
+                dt= (sim.time[:stop_mig_idx]).to(u.Myr)
+                sc = axs.scatter(sim.position.to(u.au)[p,:stop_mig_idx], sim.mass[p,:stop_mig_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
             
+            axs.loglog(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), color='white', linestyle =':', linewidth=9, zorder =1)
+
+        else:
+            if isolation_idx < sim.mass[p].size:
+                dt= (sim.time[:isolation_idx]).to(u.Myr)
+                sc = axs.scatter(sim.position.to(u.au)[p,:isolation_idx], sim.mass[p,:isolation_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
+                axs.scatter(sim.position.to(u.au)[p,isolation_idx], sim.mass[p,isolation_idx].to(u.earthMass), color = 'black', s = 150, zorder = 100)
+            else: 
+                dt= (sim.time[:stop_mig_idx]).to(u.Myr)
+                sc = axs.scatter(sim.position.to(u.au)[p,:stop_mig_idx], sim.mass[p,:stop_mig_idx].to(u.earthMass), c=dt, norm=norm,  cmap = cmap)
+
+                #axs.scatter(sim.position.to(u.au)[-1],sim.mass[-1].to(u.earthMass), marker = 'x', color = 'grey',s = 100, zorder=100)
+            axs.scatter(sim.position[p,stop_mig_idx].to(u.au), sim.mass[p,stop_mig_idx].to(u.earthMass), marker = 'x', color = 'grey', s = 100, zorder=100)
+            sc_post_iso = axs.loglog(sim.position.to(u.au)[p,isolation_idx:stop_mig_idx], sim.mass[p,isolation_idx:stop_mig_idx].to(u.earthMass), color='grey', linewidth=6, alpha = 0.1)
+
+            #if 1 in sim.filter_fraction:
+                #axs.scatter(sim.position[p,saturation_idx].to(u.au), (sim.mass[p,saturation_idx].to(u.earthMass)), marker = '*', color = 'black')
+
+             
 
     if add_cbar:
         #handling the colorbar	
         #fig.subplots_adjust(right=0.8)
-        cbar_ax = fig.add_axes([0.95, 0.15, 0.03, 0.7])
+        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
         cbar = fig.colorbar(sc, cax=cbar_ax)	
-
-
         # Manually set the colorbar boundaries and ticks
-        cbar_ax.yaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 5.0]))
+        cbar_ax.yaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 2.0, 5.0, ]))
         cbar_ax.yaxis.set_major_formatter(LogFormatter())
         cbar.ax.yaxis.set_major_formatter(plt.FuncFormatter(custom_log_formatter))
-        cbar.set_label('accretion timescale [Myr]', fontsize=20, labelpad=15)
-        cbar.ax.tick_params(axis = 'both', which = 'major', size = 13, labelsize = 13)
-        cbar.ax.tick_params(axis = 'both', which = 'minor', size = 9)
+        cbar.set_label('accretion time [Myr]', fontsize=25, labelpad=15)
+        cbar.ax.tick_params(axis = 'both', which = 'major', size = 18, labelsize = 18)
+        cbar.ax.tick_params(axis = 'both', which = 'minor', size = 12)
         
    
     # #plot the initial mass line
+    print(sim_params.t_in)
     a_p0 = np.geomspace(1e-3, 1e2, num = 1000)
-    m0 = M0_pla((a_p0*u.au).to(u.cm), sim_params.t_in, sigma_gas_steady_state((a_p0*u.au).to(u.cm), sim_params.t_in, params), params)
-    axs.loglog(a_p0, m0.to(u.earthMass), linestyle  = ':', color = 'lightblue', zorder = 0)
+    m0 = M0_pla_Mstar(a_p0, sim_params.t_in, sigma_gas_steady_state(a_p0, sim_params.t_in, params), params)
+    axs.loglog(a_p0, m0, linestyle  = ':', color = 'lightblue', zorder = 0)
     #plot the isolation mass line
-    axs.loglog(a_p0*u.au, M_peb_iso((a_p0*u.au).to(u.cm), sim_params.t_in, params).to(u.M_earth), color = "slateblue", linestyle =':', zorder = 0)
-    axs.loglog(a_p0*u.au, M_peb_iso((a_p0*u.au).to(u.cm), sim_params.t_fin, params).to(u.M_earth), color = "slateblue", linestyle =':', zorder = 0)
+    axs.loglog(a_p0, M_peb_iso(a_p0, sim_params.t_in, params), color = "slateblue", linestyle =':', zorder = 0)
+    axs.loglog(a_p0, M_peb_iso(a_p0, sim_params.t_fin, params), color = "slateblue", linestyle =':', zorder = 0)
 
     #plot the magnetic cavity and shade the region inside it (from initial to final position)
-    axs.axvline(r_magnetic_cavity_gen(sim_params.t_in, params).to(u.au).value, linestyle = '-.', color = 'grey', alpha = 0.05)
-    axs.axvline(r_magnetic_cavity_gen(sim_params.t_fin, params).to(u.au).value, linestyle = '-.', color = 'grey', alpha = 0.05)
-    axs.axvspan(r_magnetic_cavity_gen(sim_params.t_in, params).to(u.au).value, r_magnetic_cavity_gen(sim_params.t_fin, params).to(u.au).value,facecolor='none', hatch='/', edgecolor='gray', alpha =0.05)
+    axs.axvline(r_magnetic_cavity(sim_params.t_in, params), linestyle = '-.', color = 'grey', alpha = 0.05)
+    axs.axvline(r_magnetic_cavity(sim_params.t_fin, params), linestyle = '-.', color = 'grey', alpha = 0.05)
+    axs.axvspan(r_magnetic_cavity(sim_params.t_in, params), r_magnetic_cavity(sim_params.t_fin, params),facecolor='none', hatch='/', edgecolor='gray', alpha =0.05)
 
-    axs.tick_params(axis = "both", length = 15)
-    axs.tick_params(axis = "both", length = 10, which = "minor")
+    axs.tick_params(axis = "both", length = 15, labelsize = 18)
+    axs.tick_params(axis = "both", length = 10, which = "minor", labelsize = 18)
     if add_ylabel:
-        axs.set_ylabel("$M \: [M_{\oplus}]$", size = 20) 
-    axs.set_xlabel("r [AU]", size = 20) 
+        axs.set_ylabel("$M \: [M_{\oplus}]$", size = 25) 
+    axs.set_xlabel("r [AU]", size = 25) 
     axs.set_ylim(1e-7, 7e2)
-    #axs.set_xlim(3e-2, 1e2)
+    axs.set_xlim(5e-3, 1e2)
 
     all_y_ticks(axs, num_ticks=100)
+    all_x_ticks(axs, num_ticks=100)
 
 
 
@@ -706,7 +725,7 @@ def growth_timescale_heatmap(sim, params, sim_params, fig, axs,  title, fig_name
     axs.set_ylim(1e-6, 1e2)
     #plt.savefig("figures/tests/"+fig_name, bbox_inches='tight')
 
-def custom_log_formatter(x, pos):
+def custom_log_formatter_old(x, pos):
 	if x == 0:
 		return "0"
 	exponent = int(np.floor(np.log10(x)))
@@ -714,7 +733,17 @@ def custom_log_formatter(x, pos):
 	if coeff == 1:
 		return r"$10^{{{}}}$".format(exponent)
 	else:
-		return r"${:.1f} \times 10^{{{}}}$".format(coeff, exponent)
+		return  r"${:.1f} \times 10^{{{}}}$".format(coeff, exponent)
+
+def custom_log_formatter(x, pos):
+    exponent = int(np.floor(np.log10(x)))
+    coeff = x / 10**exponent
+    if x == 0:
+        return "0"
+    else:   
+        return x
+
+
 
 def generate_levels(Z):
 	Zmin = np.min(Z)
@@ -785,6 +814,17 @@ def all_y_ticks(axs, num_ticks):
     y_minor = mpl.ticker.LogLocator(base = 10.0, subs = np.arange(1.0, 10.0) * 0.1, numticks = num_ticks)
     axs.yaxis.set_minor_locator(y_minor)
     axs.yaxis.set_minor_formatter(mpl.ticker.NullFormatter())
+    plt.tick_params(axis = 'both', which = 'major', size = 10)
+    plt.tick_params(axis = 'both', which = 'minor', size = 5)
+
+def all_x_ticks(axs, num_ticks):
+    """to plot all the ticks on the y axis, N.B. num_ticks must be bigger than the nr big ticks"""
+
+    x_major = mpl.ticker.LogLocator(base = 10.0, numticks = num_ticks)
+    axs.xaxis.set_major_locator(x_major)
+    x_minor = mpl.ticker.LogLocator(base = 10.0, subs = np.arange(1.0, 10.0) * 0.1, numticks = num_ticks)
+    axs.xaxis.set_minor_locator(x_minor)
+    axs.xaxis.set_minor_formatter(mpl.ticker.NullFormatter())
     plt.tick_params(axis = 'both', which = 'major', size = 10)
     plt.tick_params(axis = 'both', which = 'minor', size = 5)
 
@@ -904,7 +944,7 @@ def label_line(line, label, x, y, color='0.5', size=12, **kwarg):
 def r_visc_irr(pos, t, params, sim_params):
     """computes the first transition from irradiated to viscous, for plotting purposes"""
     if params.H_r_model != 'irradiated':
-        a = np.where(H_R_irr(pos, params).value > H_R_visc_Lambrechts(pos, t, params).value)[0]
+        a = np.where(H_R_irr(pos, params) > H_R_visc_Lambrechts(pos, t, params))[0]
         print(a)
         if len(a)==0:
             return
@@ -918,11 +958,403 @@ def kepler11(axs, color):
     a_p0 = np.array([0.091, 0.107, 0.155, 0.195, 0.250, 0.466])*u.au
     m0 = np.array([2.78, 5, 8.13, 9.48, 2.43, 25])*u.M_earth
     # Plot the planets
-    axs.scatter(a_p0, m0, facecolors = 'none', color = color, zorder = 100)
+    axs.plot(a_p0, m0, "+", markersize=10, color = color,  zorder = 100)
 
 def solar_system(axs, color):
 
     a_p0 = np.array([0.39, 0.72, 1, 1.52, 5.2, 9.54, 19.2, 30.06 ])*u.au
     m0 = np.array([0.055, 0.815, 1, 0.107, 317.8, 95.2, 14.5, 17.1])*u.M_earth
-    axs.scatter(a_p0, m0, facecolors = 'none', color = color, zorder = 100)
+    axs.plot(a_p0, m0, "+", markersize=10, color = color, zorder = 100)
 
+def HD191939 (axs, color):
+    """System of planets TOI-1339, Orell-Miquell et al. 2022"""
+	
+    a_p0 = np.array([0.0804, 0.1752, 0.2132, 0.407, 0.812, 4.8 ])*u.au
+    m0 = np.array([10.00, 8.0, 2.80, 112.2, 13.5, 660])*u.M_earth
+    axs.plot(a_p0, m0, "+", markersize=10, color = color, zorder = 100)
+
+def HD219134 (axs, color):
+    """System of planets TOI-1469, Vogt et al. 2015"""
+
+    a_p0 = np.array([3.11, 0.3753, 0.23508,	0.14574, 0.064816, 0.0384740])*u.au
+    m0 = np.array([108, 11, 21, 8.9, 3.5, 3.8])*u.M_earth
+    axs.plot(a_p0, m0, "+", markersize=10, color = color, zorder = 100)
+
+
+def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = True, ss_moons = True, roman_sensitivity= False):
+    """"Script to plot the roman sensitivity curves from https://github.com/mtpenny/wfirst-ml-figures/tree/master/sensitivity"""
+    
+    import json
+    #Add the Solar System planet images
+    #Uses the solution by Joe Kington from https://stackoverflow.com/questions/22566284/matplotlib-how-to-plot-images-instead-of-points
+    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+
+
+    def imscatter(x, y, image, ax=None, zoom=1):
+        if ax is None:
+            ax = plt.gca()
+        try:
+            image = plt.imread(image)
+        except TypeError:
+            # Likely already an array...
+            pass
+        im = OffsetImage(image, zoom=zoom)
+        x, y = np.atleast_1d(x, y)
+        artists = []
+        for x0, y0 in zip(x, y):
+            ab = AnnotationBbox(im, (x0, y0), xycoords='data', frameon=False)
+            artists.append(ax.add_artist(ab))
+        ax.update_datalim(np.column_stack([x, y]))
+        ax.autoscale()
+        return artists
+        
+
+    if solar_system:
+        planetsize=0.1
+        imscatter([0.387098],[0.055], 'roman_sensitivity/mercury.png',ax=ax,zoom=planetsize*0.3)
+        imscatter([0.723332],[0.815], 'roman_sensitivity/venus.png',ax=ax,zoom=planetsize*0.9)
+        imscatter([1],[1],'roman_sensitivity/Earth_Western_Hemisphere_transparent_background.png',ax=ax,zoom=planetsize)
+        imscatter([1.523679],[0.107], 'roman_sensitivity/mars.png',ax=ax,zoom=planetsize*240/500.0*0.9)
+        imscatter([5.204267],[317.8],'roman_sensitivity/jupiter.png',ax=ax,zoom=planetsize)
+        imscatter([9.582017],[95.152],'roman_sensitivity/saturn.png',ax=ax,zoom=planetsize*1.35)
+        imscatter([19.229411],[15.91],'roman_sensitivity/uranus.png',ax=ax,zoom=planetsize)
+        imscatter([30.103662],[17.147],'roman_sensitivity/neptune.png',ax=ax,zoom=planetsize)
+    if ss_moons:
+        planetsize=0.1
+        imscatter([1],[0.7349/59.736],'roman_sensitivity/moon.png',ax=ax,zoom=planetsize*0.5)
+        imscatter([5.204267],[1.4819/59.736],'roman_sensitivity/ganymede.png',ax=ax,zoom=planetsize)
+        imscatter([9.582017],[1.346/59.736],'roman_sensitivity/titan.png',ax=ax,zoom=planetsize*0.22)
+
+
+    #Axis limits
+    Mmin=0.01
+    Mmax=10000 #15000
+    amin=0.009
+    amax=100
+
+    mjup=317.83
+    msun=1/3.0024584e-6   
+
+
+    amin=0.009
+    amax=100
+
+    if roman:
+        ## ROMAN SENSITIVITY LINE
+        nroaltparfile = 'roman_sensitivity/fitmaplimitsolns_NRO_layout_7f_3_covfac_52_3.json'
+        nroaltpars = json.load(open(nroaltparfile,'r'))
+
+        def nroalt(x,pars):
+            return pars['a'] + pars['b']*x + pars['g']*np.sqrt(pars['d']**2+(x-pars['e'])**2)
+
+        fittedx = np.arange(np.log10(amin)-1,np.log10(amax)+1,0.05)
+        fittedline=nroalt(fittedx,nroaltpars)
+        ax.plot(10**fittedx,10**fittedline,'-',color='black',lw=3)
+        ax.text(20,0.17,'$Roman$',color='black',rotation=45)
+    if roman_sensitivity:
+        ### ROMAN SENSITIVITY CONTOURS
+        smap = np.loadtxt('roman_sensitivity/all.magrid.NRO.layout_7f_3_covfac.52.filled') 
+        x = 10**smap[:33,0]
+        y = 10**smap[::33,1]
+        print(smap.shape,x.shape[0]*y.shape[0])
+        X,Y=np.meshgrid(x,y)
+        z = smap[:,2].reshape(X.shape) 
+        print("x",x)
+        print("y",y)
+        #Contours in log sensitivity
+        cf = ax.contourf(X,Y,z,cmap='Blues',levels=[-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5],vmin=-1,vmax=8)
+        cbar = plt.colorbar(cf,ax=ax,label='$Roman$ Sensitivity $-$ the number of planet detections\n expected if there is 1 planet per star at $(a,M_{\\rm p})$',ticks=[-1,0,1,2,3,4])
+        cbar.ax.set_yticklabels(['0.1','1','10','100','1000','10000'])
+
+    if kepler:
+        ### KEPLER SENSITIVITY LINE
+        #The Kepler line
+        kepx = np.arange(np.log10(amin),np.log10(amax),0.05)
+        def kep(x):
+            ret = np.zeros(x.shape) + Mmax*100.1
+            xx = 10**x
+            xm = (xx<1.2)
+            ret[xm] = 0.68*xx[xm]**0.75
+            return ret 
+
+        def kepburke2015(x):
+            ret = np.zeros(x.shape) + Mmax*100.1
+            xx = 10**x
+            a0 = (530.0/365.25)**(2.0/3.0)
+            xm = (xx<a0)
+            ret[xm] = 2.2*(xx[xm]/a0)**0.75
+            return ret 
+
+        ax.plot(10**kepx,kepburke2015(kepx),'-',color='r',lw=3)
+        ax.text(0.011,0.085,'$Kepler$',color='r',rotation=23)
+
+    # ax.set_axisbelow(False)
+    # ax.set_xlabel('$a_{\mathrm {p}}$ [AU]')
+    # ax.set_ylabel('$M_{\mathrm {p}} [M_{\oplus}]$')
+    # ax.set_xscale("log")
+    # ax.set_yscale("log")
+    # ax.set_xlim([amin,amax])
+    # ax.set_ylim([Mmin,Mmax])
+    # import matplotlib.ticker as ticker
+    # ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
+    # ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
+    # ax.legend(loc=3,mode="expand",bbox_to_anchor=(0.0,0.995,1.0,0.102),ncol=3,fontsize=12,numpoints=1,handletextpad=-0.5)
+    # plt.tight_layout()
+
+    plt.savefig("figures/roman_sensitivity", dpi=300)
+
+
+def boxes(axs):
+    # #SE
+    axs.fill_betweenx([1, 20], 0.01, 1, color='brown', alpha=0.1)
+    #terrestrial embryo
+    axs.fill_betweenx([0.01, 1], 0.1, 10, color='black', alpha=0.1)
+    # gas giants
+    axs.fill_betweenx([1e2, 6e3], 0.01, 0.1, color='aquamarine', alpha=0.1)
+    axs.fill_betweenx([1e2, 6e3], 0.1, 2, color='gold', alpha=0.1)
+    axs.fill_betweenx([1e2, 6e3], 2, 10, color='purple', alpha=0.1)
+
+
+#observational yields
+def Bonfils13 (axs, legend = True):
+    """Bonfis et al. 2013 for Mstar<0.3M_sun"""
+    # DUBBIO, viene da Pan et al. 2025
+    # x, y corrodinates of the dot and error bars
+    SE_x_bonfis = 0.3 #star mass for the plot
+    SE_y_bonfis = 0.52
+    #asymmetric error bars (values must be positive)
+    xerr_bonfis = np.array([[0.2],[0]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_bonfis = np.array([[0.16], [0.5]]) # Vertical error(lower and upper)
+    axs.errorbar(SE_x_bonfis, SE_y_bonfis, xerr=xerr_bonfis, yerr=yerr_bonfis, fmt='o', color='dodgerblue', capsize = 5,  label='Bonfis et al. 2013')
+    if legend:
+        axs.legend()
+
+    return
+
+#observational yields
+def Sabotta21 (axs, all_stars = False, M_lower_034 = True, M_higher_034=True, SE = True, giants = False, superSE =False,  legend = True, single_legends = False):
+    """Sabotta et al. 2021, SE 1<M<10 M_E, 10<P<100 days = 0.09<a<0.42 AU"""
+    if SE:
+        # all stars 0.1<M<0.6 M_sun (K7.0-M7.0)
+        if all_stars:
+            # x, y corrodinates of the dot and error bars
+            x = 0.4 #star mass for the plot
+            y = 0.97
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.2], [0.3]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.33], [0.42]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, all stars'if single_legends else None)
+        
+
+        # low-mass Mdwarfs M<0.34 M_sun
+        if M_lower_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.55
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.24], [0]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.26], [0.4]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}<0.34 \: M_{\odot}$'if single_legends else None)
+        
+        # high-mass Mdwarfs M>0.34 M_sun
+        if M_higher_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 2.10
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0], [0.26]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.81], [1.13]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}>0.34 \: M_{\odot}$'if single_legends else None)
+
+        if legend:
+            axs.errorbar([], [], xerr=[], yerr=[], color='lightskyblue', capsize = 5, label='Sabotta et al. 2021')
+            axs.legend()
+
+    if giants:
+        # all stars 0.1<M<0.6 M_sun (K7.0-M7.0)
+        if all_stars:
+            # x, y corrodinates of the dot and error bars
+            x = 0.4 #star mass for the plot
+            y = 0.04
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.3], [0.2]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.02], [0.03]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='sandybrown', capsize = 5,  label='Sabotta et al. 2021, all stars'if single_legends else None)
+        
+        # low-mass Mdwarfs M<0.34 M_sun
+        if M_lower_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.08
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.24], [0]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.06], [0]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, uplims=True, fmt='o', color='sandybrown', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}<0.34 \: M_{\odot}$'if single_legends else None)
+        
+        # high-mass Mdwarfs M>0.34 M_sun
+        if M_higher_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.06
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0], [0.26]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.03], [0.04]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='sandybrown', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}>0.34 \: M_{\odot}$'if single_legends else None)
+        
+        if legend:
+            axs.errorbar([], [], xerr=[], yerr=[], color='sandybrown', capsize = 5, label='Sabotta et al. 2021')
+            axs.legend()
+
+
+    if superSE:
+        # all stars 0.1<M<0.6 M_sun (K7.0-M7.0)
+        if all_stars:
+            # x, y corrodinates of the dot and error bars
+            x = 0.4 #star mass for the plot
+            y = 0.10
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.2], [0.4]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.04], [0.05]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, all stars'if single_legends else None)
+        
+        # low-mass Mdwarfs M<0.34 M_sun
+        if M_lower_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.1
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.24], [0]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.08], [0]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, uplims = True, fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}<0.34 \: M_{\odot}$'if single_legends else None)
+        
+        # high-mass Mdwarfs M>0.34 M_sun
+        if M_higher_034:
+            # x, y corrodinates of the dot and error bars
+            x = 0.34 #star mass for the plot
+            y = 0.15
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0], [0.26]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.05], [0.7]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='lightskyblue', capsize = 5,  label='Sabotta et al. 2021, $M_{\star}>0.34 \: M_{\odot}$'if single_legends else None)
+        
+        if legend:
+            axs.errorbar([], [], xerr=[], yerr=[], color='lightskyblue', capsize = 5, label='Sabotta et al. 2021')
+            axs.legend()
+
+
+    return
+
+
+def Pinamonti22 (axs,  legend = True):
+    """Pinamonti et al. 2022, Mstar 0.3-0.71 M_sun, 1<M<10 M_earth, 10<P<100 days = 0.09<a<0.42 AU"""
+
+    # x, y corrodinates of the dot and error bars
+    x = 0.5 #star mass for the plot
+    y = 0.82
+    #asymmetric error bars (values must be positive)
+    xerr = np.array([[0.2],[0.21]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr = np.array([[0.21], [0.46]]) # Vertical error(lower and upper)
+    axs.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='o', color='slateblue', capsize = 5,  label='Pinamonti et al. 2022')
+
+    if legend:
+        axs.legend()
+
+    return
+
+
+def Kunimoto20 (axs, F = False, G=True, K=True, SE = True, HJ=False, legend = True, single_legends =False):
+    """Kunimoto et al. 2020"""
+    #SE 1-2.83 R_E = 1-20 M_E, P<200 days = 0.7 AU
+    if SE:
+         # 1.04-1.4 Msun
+        if F:
+            # x, y corrodinates of the dot and error bars
+            x = 1.22
+             #star mass for the plot
+            y = 0.26
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.18], [0.18]])  # Horizontal error 
+            yerr_sabotta = np.array([[0.02], [0.03]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, fmt='o', color='navy', capsize = 5,  label='Kunimoto et al. 2020, F stars' if single_legends else None)
+        
+        # 0.8-1.04 Msun
+        if G:
+            # x, y corrodinates of the dot and error bars
+            x = 0.92 #star mass for the plot
+            y = 0.67
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.12], [0.12]])  # Horizontal error
+            yerr_sabotta = np.array([[0.05], [0.05]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='navy', capsize = 5,  label='Kunimoto et al. 2020, G stars' if single_legends else None)
+       # 0.45-0.8 Msun
+        if K:
+            # x, y corrodinates of the dot and error bars
+            x = 0.62 #star mass for the plot
+            y = 1.2
+            
+            #asymmetric error bars (values must be positive)
+            xerr_sabotta = np.array([[0.18], [0.18]])  # Horizontal error (goes down to 0.1 Msun)
+            yerr_sabotta = np.array([[0.10], [0.11]])  # Vertical error (lower and upper)
+
+            axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta,  fmt='o', color='navy', capsize = 5,  label='Kunimoto et al. 2020, K stars' if single_legends else None)
+
+
+        if legend:
+            axs.errorbar([], [], xerr=[], yerr=[], color='navy', capsize = 5, label='Kunimoto et al. 2020')
+            axs.legend()
+
+    # beyond 20M_E
+    if HJ:
+        # overall for all stars really to be checked
+        x = 0.75 #star mass for the plot
+        y = 0.77
+        
+        #asymmetric error bars (values must be positive)
+        xerr_sabotta = np.array([[0.25], [0.25]])  # Horizontal error 
+        yerr_sabotta = np.array([[0.14], [0.16]])  # Vertical error (lower and upper)
+
+        axs.errorbar(x, y, xerr=xerr_sabotta, yerr=yerr_sabotta, uplims=True, fmt='o', color='coral', capsize = 5,  label='Kunimoto et al. 2020, K stars')
+
+
+
+    return
+
+
+def Pan25(axs, SE = True, WHG = True, CG =True,legend = True):
+    """Pan et al. 2025, simulations"""
+
+    Mstar = np.array([0.1, 0.3, 0.5, 1])
+    if SE:
+        f_SE = np.array([0.1, 0.45, 0.6, 0.4])
+        axs.plot(Mstar, f_SE, linestyle ='-', color='black', label='Pan et al. 2025')
+    if WHG:
+        f_WHG = np.array([3.5e-3, 0.12, 0.15, 0.155])
+        axs.plot(Mstar, f_WHG, linestyle ='-', color='black', label='Pan et al. 2025')
+
+    if CG:
+        f_CG = np.array([1e-3,3e-2, 0.1, 2.8e-1])
+        axs.plot(Mstar, f_CG, linestyle ='-', color='black', label='Pan et al. 2025')
+
+    return
