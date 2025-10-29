@@ -213,8 +213,11 @@ def evolve_system(
     flux_on_planet = np.zeros_like(masses) # accreted pebble fraction on the planets (2D matrix [planets x times])
     flux_ratio = np.zeros(masses.shape) # ratio of the accreted pebble flux and the incoming flux
     
-    ###### NOMINAL FLUX ########
-    F0_nominal = flux_dtg_t(times, params)
+    # disc quantities related to time only
+    mdot_star= M_dot_star(times, params)
+    R_mag_cav = r_magnetic_cavity(mdot_star, params)
+     ###### NOMINAL FLUX ########
+    F0_nominal = flux_dtg_t(mdot_star, params)
 
     pos_previous = np.zeros_like(positions) #to check if the planets overtake each other
     pos_out = positions[0] #to kill the planets if they overtake each other
@@ -223,16 +226,16 @@ def evolve_system(
 
         # Iceline treatment: cuts the flux in half, increases the vertical stirring
         if params.iceline_alpha_change:
-            params.update_alpha_z_iceline(positions[i], iceline(times, 170, params))
+            params.update_alpha_z_iceline(positions[i], iceline(mdot_star, 170, params))
         if params.iceline_alpha_frag_change:
-            params.update_alpha_frag_iceline(positions[i], iceline(times, 170, params))
+            params.update_alpha_frag_iceline(positions[i], iceline(mdot_star, 170, params))
         if params.iceline_v_frag_change:
-            params.update_v_frag_iceline(positions[i], iceline(times, 170, params))
+            params.update_v_frag_iceline(positions[i], iceline(mdot_star, 170, params))
             print("v_frag planet "+str(positions[i])[:4], params.v_frag*(u.au/u.Myr).to(u.m/u.s))
              
         if params.iceline_flux_change:
             if params.iceline_radius == None:
-                iceline_radius = iceline(times, 170, params)
+                iceline_radius = iceline(mdot_star, 170, params)
                 print("current iceline position: ", iceline_radius)
             else:
                 iceline_radius = params.iceline_radius
@@ -240,8 +243,12 @@ def evolve_system(
         else: 
             F0 = F0_nominal
 
+        #disc quantities related to planet position 
+        H_r = H_R(positions[i], mdot_star, params)
+        Sigma_gas = sigma_gas_steady_state(positions[i], H_r, mdot_star, params)
+
         print("Planet "+str(positions[i])[:4]+", F0: ", F0*(u.earthMass/u.Myr))
-        print("Planet "+str(positions[i])[:4]+", M_dot_star: ", M_dot_star(times, params)*(u.M_earth/u.Myr).to(u.M_sun/u.yr))
+        print("Planet "+str(positions[i])[:4]+", M_dot_star: ", mdot_star*(u.M_earth/u.Myr).to(u.M_sun/u.yr))
 
         # to flag the accretion regime we are in
         peb_acc._set_planet_id (i)
@@ -251,8 +258,7 @@ def evolve_system(
         gas_acc.create_dict_planet_entry(i)
 
         # Diff equation for mass growth [planets x times]
-        #M_dot[i], R_acc[i], H_peb[i], R_acc_H[i], R_acc_B[i], M_dot_twoD_B[i], M_dot_twoD_H[i],M_dot_threeD_B[i], M_dot_threeD_H[i], M_dot_threeD_unif[i], sigma_peb[i], sigma_gas[i], H_r[i], acc_regimes = peb_acc.dMc_dt_f(times, masses[i], positions[i], F0, flux_reduction, params, sim_params)
-        M_dot[i], sigma_peb[i], sigma_gas[i], acc_regimes = peb_acc.dMc_dt_f(times, masses[i], positions[i], F0, flux_reduction, params, sim_params)
+        M_dot[i], sigma_peb[i], sigma_gas[i], acc_regimes = peb_acc.dMc_dt_f(times, masses[i], positions[i], mdot_star, H_r, Sigma_gas, F0, flux_reduction, params)
 
         # delaying the embryo
         time_mask = times < sim_params.t0[i]
@@ -260,16 +266,13 @@ def evolve_system(
 
         # option for migration
         if migration:
-            sigma_gas_val = sigma_gas_steady_state(positions[i], times, params)
-            print("Sigma gas:", sigma_gas_val)
+            print("Sigma gas:", Sigma_gas)
                 
-            #R_dot[i] = dR_dt(times, positions[i], masses[i], sigma_gas_val, params)
-            R_dot[i] = dR_dt_both(times, positions[i], masses[i], sigma_gas_val, params) #includes type II prescription
+            R_dot[i] = dR_dt_both(times, positions[i], masses[i], H_r, Sigma_gas, params) #includes type II prescription
 
-            #print("ratio of the positions", (pos_out/positions[i])**(3/2))
-
+            H_r_previous = H_R(positions[i-1], mdot_star, params) #needed to compute the resonance condition
             # I want the resonance trapping to be activated only after the planets reach pebble isolation mass
-            if params.resonance_trapping and masses[i] > M_peb_iso(positions[i], times, params) and masses[i-1] > M_peb_iso(positions[i-1], times, params):
+            if params.resonance_trapping and masses[i] > M_peb_iso(H_r, params) and masses[i-1] > M_peb_iso(H_r_previous, params):
                 if ((pos_out/positions[i])**(3/2))<2 and ((pos_out/positions[i])**(3/2))!= 1:
                     # outer planet gets trapped in resonance
                     R_dot[i-1] = 0
@@ -278,29 +281,25 @@ def evolve_system(
 
                 else:
                     # planet reaches inner edge
-                    #dead_by_mig = (positions[i] < r_magnetic_cavity(sim_params.t_fin, params)) #final position mag cav radius
-                    dead_by_mig = (positions[i] < r_magnetic_cavity(times, params)) #inward drifting magentic cavity radius
+                    dead_by_mig = (positions[i] < R_mag_cav) #inward drifting magentic cavity radius
                     R_dot[i, dead_by_mig] = 0  # dR/dt = 0 in case the planet has reached the inner edge 
-                    #positions[i, dead_by_mig] = r_magnetic_cavity(sim_params.t_fin, params)  # set the position to the inner edge
-                    positions[i, dead_by_mig] = r_magnetic_cavity(times, params)  # set the position to the inner edge
+                    positions[i, dead_by_mig] = R_mag_cav  # set the position to the inner edge
                                 
                     if dead_by_mig:
                         print("Planet "+str(positions[i])[:4]+" reached the inner edge")
                         print("R_planet", positions[i])
-                        print("magentic cavity", r_magnetic_cavity(times, params))
+                        print("magentic cavity", R_mag_cav)
             else:
                 #regardless of iso, check if the planet has reached the inner edge
-                dead_by_mig = (positions[i] < r_magnetic_cavity(times, params))
-                #dead_by_mig = (positions[i] < r_magnetic_cavity(sim_params.t_fin, params))
+                dead_by_mig = (positions[i] < R_mag_cav)
                 R_dot[i, dead_by_mig] = 0  # dR/dt = 0 in case the planet has reached the inner edge 
                 M_dot[i, dead_by_mig] = 0  # dM/dt = 0 in case the planet has reached the inner edge
-                positions[i, dead_by_mig] = r_magnetic_cavity(times, params)  # set the position to the inner edge
-                #positions[i, dead_by_mig] = r_magnetic_cavity(sim_params.t_fin, params)  # set the position to the inner edge
+                positions[i, dead_by_mig] = R_mag_cav  # set the position to the inner edge
             
                 if dead_by_mig:
                     print("Planet "+str(positions[i])[:4]+" reached the inner edge")
                     print("R_planet", positions[i])
-                    print("magentic cavity", r_magnetic_cavity(times, params))
+                    print("magentic cavity", R_mag_cav)
                 
             #to check if the planets overtake each other
             for j in range(i):
@@ -313,11 +312,10 @@ def evolve_system(
             #the temporary position is the outer planet
             pos_out = positions[i]
             pos_previous = positions.copy()
-
-        if masses[i] > M_peb_iso(positions[i], times, params):
+        if masses[i] > M_peb_iso(H_r, params):
             # to give the option of not having gas accretion (for the timescale plots)
             if params.gas_accretion:
-                M_dot[i], gas_accretion_dict = gas_acc.dMc_dt_gas(times, masses[i], positions[i], params, sim_params)
+                M_dot[i], gas_accretion_dict = gas_acc.dMc_dt_gas(times, masses[i], positions[i], Sigma_gas, H_r, params)
             else:
                 M_dot[i] = 0
         else:
@@ -331,7 +329,7 @@ def evolve_system(
         flux_on_planet[i] = F0 * flux_reduction
         filter_frac[i] = np.clip(M_dot[i] / flux_on_planet[i], 0, 1)  # filtering fraction due to the planet i is restricted between [0,1]
         filter_frac[i, flux_on_planet[i] == 0] = 0  # when one planet reaches peb iso the definition of ff is 0/0, this prevents the code from crushing
-        dead = (masses[i] > M_peb_iso(positions[i], times, params)) | (positions[i] < r_magnetic_cavity(times, params))  # cut the simulation once it reaches pebble isolaton mass or inner edge
+        dead = (masses[i] > M_peb_iso(H_r, params)) | (positions[i] < R_mag_cav)  # cut the simulation once it reaches pebble isolaton mass or inner edge
         #filter_frac[i, dead] = 1 # in case the planet reaches peb iso or inner cutoff the ff is 1
         filter_frac[i, dead] = params.iso_filtering # in case the planet reaches peb iso or inner cutoff the ff is 1
         flux_ratio[i] = flux_on_planet[i]/F0
