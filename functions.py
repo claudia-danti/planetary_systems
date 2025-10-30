@@ -239,11 +239,11 @@ def M_dot_star_t_Mstar(t, params):
     return 10**(-5.12-0.46*np.log10(t/yr_to_Myr)-5.75*np.log10(params.star_mass/M_sun_M_E)+1.17*np.log10(t/yr_to_Myr)*np.log10(params.star_mass/M_sun_M_E))*M_sun_yr_to_M_E_Myr
 
 def M_dot_star_linear_scaling(t, params):
-    MdotH16 =10**(-5.12-0.46*np.log10(t/yr_to_Myr)-5.75*np.log10(params.star_mass/M_sun_M_E)+1.17*np.log10(t/yr_to_Myr)*np.log10(params.star_mass/M_sun_M_E))*M_sun_yr_to_M_E_Myr
+    MdotH16 = 10**(((-1.32)-(1.07)*np.log10(t/yr_to_Myr)))*M_sun_yr_to_M_E_Myr
     return MdotH16*(params.star_mass/(1*const.M_sun.cgs.to(u.M_earth).value))
 
 def M_dot_star_quadratic_scaling(t, params):
-    MdotH16 = 10**(-5.12-0.46*np.log10(t/yr_to_Myr)-5.75*np.log10(params.star_mass/M_sun_M_E)+1.17*np.log10(t/yr_to_Myr)*np.log10(params.star_mass/M_sun_M_E))*M_sun_yr_to_M_E_Myr
+    MdotH16 = 10**(((-1.32)-(1.07)*np.log10(t/yr_to_Myr)))*M_sun_yr_to_M_E_Myr
     return MdotH16*(params.star_mass/(1*const.M_sun.cgs.to(u.M_earth).value))**2
 
 def M_dot_star(t, params):
@@ -634,7 +634,7 @@ def planet_counter(simulations, parameters, sim_parameters, outer = False):
         else:
             first_planet = 0
         for p in range(first_planet, sim_params.nr_planets):
-            idx = idxs (sim.time[p], sim.mass[p], sim.position[p], sim.filter_fraction[p], 
+            idx = idxs (sim.time[p].value, sim.mass[p].value, sim.position[p].value, sim.filter_fraction[p], 
                             sim.dR_dt[p], sim.dM_dt[p], params, True)
             stop_mig_idx = idx['stop_mig_idx'].values[0]
             tot_planets_counter +=1
@@ -674,10 +674,11 @@ def idxs (time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration
     #Creates the index dictionary
 
     idx_or_last = lambda fltr: np.argmax(fltr) if np.any(fltr) else fltr.size
+
     isolation_mass = M_peb_iso(H_R(position, M_dot_star(time, params), params), params)
     stop_idx = np.argmin(position) #returns the position of the min value of position
     stop_mass_idx = np.any(np.where(dM_dt == 0)[0][0]) if np.any(np.where(dM_dt == 0)[0]) else dM_dt.size
-    isolation_idx = np.where(mass.value > isolation_mass)[0]
+    isolation_idx = np.where(mass > isolation_mass)[0]
     if isolation_idx.size > 0:
         isolation_idx = isolation_idx[0]
     else:
@@ -692,7 +693,7 @@ def idxs (time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration
             stop_mig_idx = len(dR_dt) - 1  # or some other default value
         # Returns the position of the first time for which r < r_mag
         #returns the position of the first time for which r<r_mag 
-        inner_edge_idx = idx_or_last(position.value < r_magnetic_cavity(time.value, params))
+        inner_edge_idx = idx_or_last(position < r_magnetic_cavity(time, params))
         if stop_idx < inner_edge_idx:
             coll_or_res_idx = stop_idx
             end_idx = min(inner_edge_idx, coll_or_res_idx)

@@ -21,10 +21,10 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
     #Creates the index dictionary
 
     idx_or_last = lambda fltr: np.argmax(fltr) if np.any(fltr) else fltr.size
-    isolation_mass = M_peb_iso(position.value, time.value, params)
+    isolation_mass = M_peb_iso(H_R(position, M_dot_star(time, params),params), params)
     stop_idx = np.argmin(position) #returns the position of the min value of position
     stop_mass_idx = np.any(np.where(dM_dt == 0)[0][0]) if np.any(np.where(dM_dt == 0)[0]) else dM_dt.size
-    iso_idx = np.argmax(mass.value > isolation_mass)
+    iso_idx = np.argmax(mass > isolation_mass)
     
     if iso_idx !=0:
         isolation_idx = iso_idx
@@ -40,7 +40,7 @@ def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migr
             stop_mig_idx = len(dR_dt) - 1  # or some other default value
         # Returns the position of the first time for which r < r_mag
         #returns the position of the first time for which r<r_mag 
-        inner_edge_idx = idx_or_last(position.value < r_magnetic_cavity(time.value, params))
+        inner_edge_idx = idx_or_last(position < r_magnetic_cavity(time, params))
         if stop_idx < inner_edge_idx:
             coll_or_res_idx = stop_idx
             end_idx = min(inner_edge_idx, coll_or_res_idx)
