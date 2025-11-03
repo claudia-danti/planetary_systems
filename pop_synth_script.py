@@ -78,7 +78,7 @@ num_samples = 1000  # Number of Monte Carlo samples
 tau_disc_samples = np.random.normal(mu, sigma, num_samples)
 
 #star_mass = 0.5*const.M_sun.to(u.M_earth).value
-output_folder = 'sims/gas_acc/stellar_masses/single_planets/linear/surfheat/lowres/Fe_H_07/5Myrs_randomMstar_randomZ'
+output_folder = 'sims/gas_acc/stellar_masses/single_planets/linear/surfheat/lowres/newcode/mockOld/Fe_H_07/5Myrs_randomMstar_randomZ'
 t_fin = 5 #Myr, end of sim
 N_steps = 500 #number of steps of the sim 
 
@@ -102,8 +102,9 @@ for  a_p0_in, t0_in, Z, star_mass in zip(a_p0_inner_samples, t0_inner_samples, Z
     params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=star_mass*const.M_sun.to(u.M_earth).value, Z = Z)
     print("Z", params.Z)
     #initial conditions: both a_p0 and m0 take the outer planet and one of the inner planets
-    sigma_gas_inner = sigma_gas_steady_state(a_p0_in, t0_in, params)
-    m0_in = M0_pla_Mstar(a_p0_in, t0_in, sigma_gas_inner, params)
+    mdot_star = M_dot_star(t0_in, params)
+    sigma_gas_inner = sigma_gas_steady_state(a_p0_in, H_R(a_p0_in, mdot_star, params), mdot_star, params)
+    m0_in = M0_pla_Mstar(a_p0_in, H_R(a_p0_in, mdot_star, params), sigma_gas_inner, params)
 
     a_p0 = np.array([a_p0_in])
     m_0 = np.array([m0_in])
