@@ -24,7 +24,7 @@ kg_to_M_E = (1*u.kg).to(u.M_earth).value
 s_to_Myr = (1*u.s).to(u.Myr).value
 erg_s_to_au_M_E_Myr = (1*u.erg/u.s).to(u.au**2*u.M_earth/u.Myr**3).value
 kpc_to_au = (1*u.kpc).to(u.au).value
-
+c_AU_Myr = const.c.to(u.au/u.Myr).value #approx 1e10
 @u.quantity_input
 
 def omega_k(position, params) :
@@ -640,7 +640,7 @@ def planet_counter(simulations, parameters, sim_parameters, outer = False):
             tot_planets_counter +=1
             m_fin_idx = stop_mig_idx
 
-            if 1<sim.mass[p,m_fin_idx].to(u.M_earth).value<20 and sim.position[p,m_fin_idx].to(u.au).value<1:
+            if 1<sim.mass[p,m_fin_idx].to(u.M_earth).value<10 and sim.position[p,m_fin_idx].to(u.au).value<1:
                 SE_counter +=1
             if 0.01<sim.mass[p,m_fin_idx].to(u.M_earth).value<1:
                 if sim.position[p, m_fin_idx].to(u.au).value<0.1:
@@ -748,21 +748,6 @@ def MMSN (position):
     """Minimum mass solar nebula according to Hayashi 1981"""
     return (1700*(position)**(-3/2)*u.g/u.cm**2).to(u.M_earth/u.au**2)
 
-def R_Einstein(D_s, D_l, params):
-    """Einstein radius according to Eq: 11 Gaudi review"""
-    x = D_l/D_s
-    print(x)
-    return 2.85*(params.star_mass/(0.5*M_sun_M_E))**(1/2)*(D_s/8)**(1/2)*(x*(1-x)/0.25)**(1/2)
-
-def Roman_Sensitivity(position):
-    """Roman sensitivity according to Eq. 10 Penny et al. 2019"""
-    alpha = -3.9
-    beta = -1.15
-    gamma = 3.56
-    delta = 0.783
-    epsilon = 0.356
-    return 10**(alpha + beta*np.log10(position)+gamma*np.sqrt(delta**2+(np.log10(position)-epsilon)**2))
-
 def Z_to_Fe_H (Z):
     """Fe/H to Z relation according to Burn 2021"""
     f_dtf_solar = 0.0149 #Lodders 2003
@@ -774,6 +759,39 @@ def Fe_H_to_Z (Fe_H):
     return f_dtf_solar*10**Fe_H
 
 
+################## MICROLENSING FUNCTIONS ####################
+
+def R_Einstein(M_l, D_s, D_l):
+    """Einstein radius according to Eq: 11 Gaudi review"""
+    x = D_l/D_s
+    return 2.85*(M_l/(0.5*M_sun_M_E))**(1/2)*(D_s/8)**(1/2)*(x*(1-x)/0.25)**(1/2)
+
+# i think is too low of an angle
+def theta_E (M_l, D_s, D_l):
+    """Einstein angular radius"""
+    D_rel = (1/D_l - 1/D_s)**(-1)
+    return np.sqrt(4*G*M_l/(D_rel*c_AU_Myr**2))
+
+def R_E(M_l, D_s, D_l):
+    """Einstein radius"""
+    return theta_E(M_l, D_s, D_l)*D_l
+
+def s_to_a(s, M_l, D_s, D_l):
+    return s*R_Einstein(M_l, D_s, D_l)
+
+def a_to_s (a, M_l, D_s, D_l):
+    return a/R_Einstein(M_l, D_s, D_l)
+
+
+def Roman_Sensitivity(position):
+    """Roman sensitivity according to Eq. 10 Penny et al. 2019"""
+    alpha = -3.9
+    beta = -1.15
+    gamma = 3.56
+    delta = 0.783
+    epsilon = 0.356
+    return 10**(alpha + beta*np.log10(position)+gamma*np.sqrt(delta**2+(np.log10(position)-epsilon)**2))
+
 def s_w(q):
     """Boundary for cloed topology, Dominik 1999"""
     return (1+q**(1/3)/2)
@@ -782,14 +800,103 @@ def s_c(q):
     """Boundary for open topology, Dominik 1999"""
     return (1-3*q**(1/3)/4)
 
-def lensing_triangle(q):
-    """Lensing zone triangle boundaries for a high-magnification event, Gould et al. 2010, equation  2"""
-    #returns array with s_minus and s_plus
-    eta = 0.32
-    xi = 1/50
-    Amax = 3000
-    q_min = xi/Amax
-    s_plus = np.exp(eta*np.log(q/q_min))
-    s_minus = np.exp (-eta*np.log(q/q_min))
-    s = np.array([s_minus, s_plus])
-    return s
+
+def lensing_triangle_line_QS_space(q, eta, xi, Amax):
+    """
+    Lensing zone triangle boundaries for a high-magnification event, Gould et al. 2010, equation 2. If stop_at_cross=True, exclude q < q_min but ensure the tip (q_min, s=1)
+    is included even if not present in the input q array.
+    """
+    # sort q and keep track of original order
+    order = np.argsort(q)
+    q = q[order]
+
+    #the tip of the lensing triangle. xi is due to the data quality, Amax to the magnification
+    q_min = xi / Amax
+    # compute on sorted q so indices line up
+    s_plus = np.exp(eta * np.log(q / q_min))
+    s_minus = np.exp(-eta * np.log(q / q_min))
+
+    mask = q >= q_min
+    q_out = q[mask]
+    s_plus_out = s_plus[mask]
+    s_minus_out = s_minus[mask]
+
+    return s_minus_out, s_plus_out, q_out
+
+
+def lensing_triangle_line_MA_space(M_p, M_l, D_s, D_l, eta, xi, Amax):
+    """Lensing triangle in (M_p, a) space. Returns the a_minus and a_plus boundaries and the corresponding M_p_masked array. 
+    Works when M_l is scalar or an array (same length as M_p).
+    """
+    # if single lens mass given, broadcast to match M_p
+    if M_l.size == 1 and M_p.size > 1:
+        M_l = np.full_like(M_p, M_l)
+
+    # compute q and sort so indices line up
+    q = M_p / M_l
+    order = np.argsort(q)
+    q_sorted = q[order]
+    M_l_sorted = M_l[order]
+
+    q_min = xi / Amax
+
+
+    # to avoid invalid logs/powers
+    ratio = q_sorted / q_min
+    valid = ratio > 0 #probably useless but just in case
+    s_plus = np.full_like(ratio, np.nan)
+    s_minus = np.full_like(ratio, np.nan)
+    s_plus[valid] = ratio[valid] ** eta
+    s_minus[valid] = ratio[valid] ** (-eta)
+
+
+    mask = q_sorted >= q_min # True inside the mask
+    q_masked = q_sorted[mask]
+    s_plus_masked = s_plus[mask]
+    s_minus_masked = s_minus[mask]
+    M_l_masked = M_l_sorted[mask]
+
+
+    # compute a_minus/a_plus using the matching (masked) lens masses
+    a_minus = s_minus_masked * R_Einstein(M_l_masked, D_s, D_l)
+    a_plus = s_plus_masked * R_Einstein(M_l_masked, D_s, D_l)
+
+    # M_p_masked computed from q_out * corresponding M_l_out (robust)
+    M_p_masked = q_masked * M_l_masked
+
+    return a_minus, a_plus, M_p_masked
+
+
+
+def lensing_triangle_sensitivity_Ma_space(M_p, a, M_l, D_s, D_l, eta, xi, Amax, inside_sensitivity=1.0, outside_sensitivity=0.0):
+    """returns 100% detection rate inside the triangle and 0 outside"""
+       # if single lens mass given, broadcast to match M_p
+    if M_l.size == 1 and M_p.size > 1:
+        M_l = np.full_like(M_p, M_l)
+
+    # compute q and sort so indices line up
+    q = M_p / M_l
+    order = np.argsort(q)
+    q_sorted = q[order]
+    M_l_sorted = M_l[order]
+
+    q_min = xi / Amax
+
+
+    # to avoid invalid logs/powers
+    ratio = q_sorted / q_min
+    valid = ratio > 0 #probably useless but just in case
+    s_plus = np.full_like(ratio, np.nan)
+    s_minus = np.full_like(ratio, np.nan)
+    s_plus[valid] = ratio[valid] ** eta
+    s_minus[valid] = ratio[valid] ** (-eta)
+
+
+    # compute a_minus/a_plus using the matching lens masses
+    a_minus = s_minus * R_Einstein(M_l_sorted, D_s, D_l)
+    a_plus = s_plus * R_Einstein(M_l_sorted, D_s, D_l)
+
+    mask = (M_p >= q_min * M_l_sorted) & (a >= a_minus) & (a <= a_plus) #identifies the inside of the triangle
+    #returns an array with 1 inside the triangle and 0 outside
+    return np.where(mask, inside_sensitivity, outside_sensitivity)
+

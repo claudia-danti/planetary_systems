@@ -71,16 +71,16 @@ mstar_samples = np.interp(MC_random, IMF_cdf, Mstars)
 
 
 # Gaussian distribution of disc lifetime
-mu = 3  # Mean disc lifetime in Myr
+mu = 5  # Mean disc lifetime in Myr
 sigma = 0.5  # Standard deviation
 num_samples = 1000  # Number of Monte Carlo samples
 # Generate random tau_disc values from a Gaussian distribution
 tau_disc_samples = np.random.normal(mu, sigma, num_samples)
 
 #star_mass = 0.5*const.M_sun.to(u.M_earth).value
-output_folder = 'sims/gas_acc/stellar_masses/single_planets/linear/surfheat/lowres/newcode/mockOld/Fe_H_07/5Myrs_randomMstar_randomZ'
+output_folder = 'sims/gas_acc/stellar_masses/single_planets/linear/vfrag/surfheat/Fe_H_07/5Myrs_01Mstar_randomZ'
 t_fin = 5 #Myr, end of sim
-N_steps = 500 #number of steps of the sim 
+N_steps = 5000 #number of steps of the sim 
 
 # Number of samples to generate
 seed = 12
@@ -95,12 +95,11 @@ a_p0_inner_samples = stats.loguniform.rvs(R_in, R_out, size=num_samples, random_
 t0_inner = ([t0_inner_samples] * np.ones(len(a_p0_inner_samples))) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
 
 
-# for  a_p0_in, t0_in, Z in zip(a_p0_inner_samples, t0_inner_samples, Z_samples):
-#     params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=0.1*const.M_sun.to(u.M_earth).value, Z = Z)
+for  a_p0_in, t0_in, Z in zip(a_p0_inner_samples, t0_inner_samples, Z_samples):
+    params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=0.1*const.M_sun.to(u.M_earth).value, Z = Z)
 
-for  a_p0_in, t0_in, Z, star_mass in zip(a_p0_inner_samples, t0_inner_samples, Z_samples, mstar_samples ):
-    params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=star_mass*const.M_sun.to(u.M_earth).value, Z = Z)
-    print("Z", params.Z)
+# for  a_p0_in, t0_in, Z, star_mass in zip(a_p0_inner_samples, t0_inner_samples, Z_samples, mstar_samples ):
+#     params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=star_mass*const.M_sun.to(u.M_earth).value, Z = Z)
     #initial conditions: both a_p0 and m0 take the outer planet and one of the inner planets
     mdot_star = M_dot_star(t0_in, params)
     sigma_gas_inner = sigma_gas_steady_state(a_p0_in, H_R(a_p0_in, mdot_star, params), mdot_star, params)
