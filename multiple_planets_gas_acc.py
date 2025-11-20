@@ -115,11 +115,15 @@ class SimulationParams:
     # sepcifying the step size needs to be computed based on the input of N_step
     step_size: float = field(init=False)
     t: np.array = field(init=False)
+    ## new syntax cause lese Python complains
+    m0: np.ndarray = field(default_factory=lambda: np.array([1e-3]*5))
+    a_p0: np.ndarray = field(default_factory=lambda: np.array([20,15,10,5,2]))
+    t0: np.ndarray = field(default_factory=lambda: 0.1 * np.ones(5))
 
-    # initial mass and position arrays for the two planets
-    m0: np.array = np.array([1e-3, 1e-3, 1e-3, 1e-3, 1e-3]) #M_earth
-    a_p0: np.array = np.array([20, 15, 10, 5, 2]) #au
-    t0: np.array = [0.1] * np.ones(len(a_p0)) #Myr # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
+    # initial mass and position arrays for the two planets, old syntax
+    # m0: np.array = np.array([1e-3, 1e-3, 1e-3, 1e-3, 1e-3]) #M_earth
+    # a_p0: np.array = np.array([20, 15, 10, 5, 2]) #au
+    # t0: np.array = [0.1] * np.ones(len(a_p0)) #Myr # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
     
     def __post_init__(self):
             self.step_size = (self.t_fin - self.t_in) / self.N_step
