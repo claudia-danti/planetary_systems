@@ -525,6 +525,7 @@ def L_star(M_star):
     #theoretically I should put +0.001 to match the Liu et al boundary conditions
     return ((M_star/M_sun_M_E)**(3/2))*(const.L_sun.cgs.to(u.au**2*u.M_earth/u.Myr**3).value)#(const.L_sun.cgs.value)*erg_s_to_au_M_E_Myr
 
+############## STELLAR IMFs ###################
 def Kroupa_IMF_pdf(M_star):
     """Kroupa IMF, equation (7) in Maschberger 2013, normalised between 0.01 and 150 solar masses"""
     k0=1
@@ -590,6 +591,17 @@ def Chabrier_2005_IMF_pdf(M_star):
     else:
         return 0.041*M_star**(-1.65)
     
+def Robin_2003_IMF(M_star):
+    """Robin et al. 2003 IMF, from Penny 2019 paper"""
+    if M_star<1 and M_star>=0.079:
+        return M_star**(-1.6)
+    elif M_star>=1:
+        return M_star**(-3.0)
+
+
+
+
+
 def pebble_prod_line(time, params):
     """pebble production line according to eq 10 of LJ14"""
 
@@ -832,37 +844,32 @@ def lensing_triangle_line_MA_space(M_p, M_l, D_s, D_l, eta, xi, Amax):
     if M_l.size == 1 and M_p.size > 1:
         M_l = np.full_like(M_p, M_l)
 
-    # compute q and sort so indices line up
+    
+    # sort q and keep track of original order
+    #important if the input mass vector is random and not ordered
+    print("max mass", np.max(M_p))
+
     q = M_p / M_l
     order = np.argsort(q)
-    q_sorted = q[order]
-    M_l_sorted = M_l[order]
+    q = q[order]
+    M_l = M_l[order]
+    M_p = M_p[order]
 
     q_min = xi / Amax
+    ratio = q / q_min
+    s_plus = ratio ** eta
+    s_minus = ratio ** (-eta)
 
 
-    # to avoid invalid logs/powers
-    ratio = q_sorted / q_min
-    valid = ratio > 0 #probably useless but just in case
-    s_plus = np.full_like(ratio, np.nan)
-    s_minus = np.full_like(ratio, np.nan)
-    s_plus[valid] = ratio[valid] ** eta
-    s_minus[valid] = ratio[valid] ** (-eta)
-
-
-    mask = q_sorted >= q_min # True inside the mask
-    q_masked = q_sorted[mask]
-    s_plus_masked = s_plus[mask]
+    mask = q >= q_min 
+    s_plus_masked = s_plus[mask] #compute the separation for those masses
     s_minus_masked = s_minus[mask]
-    M_l_masked = M_l_sorted[mask]
-
+    M_l_masked = M_l[mask] #corresponding lens masses
+    M_p_masked = M_p[mask]
 
     # compute a_minus/a_plus using the matching (masked) lens masses
     a_minus = s_minus_masked * R_Einstein(M_l_masked, D_s, D_l)
     a_plus = s_plus_masked * R_Einstein(M_l_masked, D_s, D_l)
-
-    # M_p_masked computed from q_out * corresponding M_l_out (robust)
-    M_p_masked = q_masked * M_l_masked
 
     return a_minus, a_plus, M_p_masked
 

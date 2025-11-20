@@ -12,6 +12,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.ticker
 from matplotlib.ticker import ScalarFormatter, LogFormatter, LogLocator
 from matplotlib import colors
+import matplotlib.colors as mcolors
 
 
 ########## GENERIC PLOTTING FUNCTION, FOR M(t), ff(t), GROWTH TRACKS #####################
@@ -1049,8 +1050,8 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
 
         fittedx = np.arange(np.log10(amin)-1,np.log10(amax)+1,0.05)
         fittedline=nroalt(fittedx,nroaltpars)
-        ax.plot(10**fittedx,10**fittedline,'-',color='black',lw=3)
-        ax.text(20,0.17,'$Roman$',color='black',rotation=45)
+        ax.plot(10**fittedx,10**fittedline,'-',color='lightgrey',lw=3)
+        ax.text(20,0.17,'$Roman$',color='lightgrey',rotation=45)
     if roman_sensitivity:
         ### ROMAN SENSITIVITY CONTOURS
         smap = np.loadtxt('roman_sensitivity/all.magrid.NRO.layout_7f_3_covfac.52.filled') 
@@ -1062,7 +1063,23 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
         print("x",x)
         print("y",y)
         #Contours in log sensitivity
-        cf = ax.contourf(X,Y,z,cmap='Blues',levels=[-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5],vmin=-1,vmax=8)
+
+        ### my messing around withg colors
+        # fraction of the colormap to keep (skip low/high ends)
+        N = 11
+        start_frac = 0.08
+        end_frac   = 0.92
+        base = plt.get_cmap('hot').reversed()
+        colors = base(np.linspace(start_frac, end_frac, N))
+        discrete_cmap = mcolors.ListedColormap(colors)
+        levels = [-1.0,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5]
+        norm = mcolors.BoundaryNorm(levels, discrete_cmap.N)
+        cf = ax.contour(X, Y, z, levels=levels, cmap=discrete_cmap, norm=norm ,vmin=-1,vmax=8  )
+        ### end my messing around with colors
+
+        # cmap = mpl.colormaps["hot"].reversed()(np.linspace(0, 1, N))
+        # #cmap = plt.get_cmap('hot')
+        # cf = ax.contour(X,Y,z,cmap=cmap,levels=[-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5],vmin=-1,vmax=8)
         cbar = plt.colorbar(cf,ax=ax,label='$Roman$ Sensitivity $-$ the number of planet detections\n expected if there is 1 planet per star at $(a,M_{\\rm p})$',ticks=[-1,0,1,2,3,4])
         cbar.ax.set_yticklabels(['0.1','1','10','100','1000','10000'])
 
@@ -1101,7 +1118,7 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
     # ax.legend(loc=3,mode="expand",bbox_to_anchor=(0.0,0.995,1.0,0.102),ncol=3,fontsize=12,numpoints=1,handletextpad=-0.5)
     # plt.tight_layout()
 
-    plt.savefig("figures/roman_sensitivity", dpi=300)
+    #plt.savefig("figures/roman_sensitivity", dpi=300)
 
 
 def boxes(axs):
