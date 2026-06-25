@@ -332,11 +332,8 @@ class GasAccretion:
     def dMc_dt_gas(self, t, M_core, position, sigma_gas, H_r, params):
 
         KH_accretion = M_dot_gas_KH(M_core, params)
-        print("KH accretion", KH_accretion)
         runaway_accretion = M_dot_gas_runaway(position, M_core, H_r, sigma_gas, params)
-        print("runaway accretion", runaway_accretion)
-        mdot_gas_disc = M_dot_star(t, params)
-        print("disc accretion", mdot_gas_disc)
+        mdot_gas_disc = params.mdot_star_func(t)
 
         # Determine the minimum accretion rate
         min_accretion = np.minimum(np.minimum(KH_accretion, runaway_accretion), mdot_gas_disc)

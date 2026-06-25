@@ -25,6 +25,7 @@ s_to_Myr = (1*u.s).to(u.Myr).value
 erg_s_to_au_M_E_Myr = (1*u.erg/u.s).to(u.au**2*u.M_earth/u.Myr**3).value
 kpc_to_au = (1*u.kpc).to(u.au).value
 c_AU_Myr = const.c.to(u.au/u.Myr).value #approx 1e10
+erg_s_to_au2_g_s = (1*u.erg/u.s).to(u.au**2*u.g/u.s**3).value
 @u.quantity_input
 
 def omega_k(position, params) :
@@ -161,7 +162,6 @@ def st_drift_epstein(position, H_r, mdot_star, sigma_gas, params):
     """Drift limit using t_g = t_drift for a Sigma_peb = F/(2 pi r v_r), F St independent, using St^2+1 = 1"""
     # N.B.: this is in epstein regime
     F = params.Z*mdot_star
-    print("F", F)
 
     return np.sqrt((np.sqrt(3)*params.epsilon_p*F)/(32*np.pi*sigma_gas*position*eta(H_r, params)**2*v_k(position, params)))
 
@@ -240,11 +240,11 @@ def M_dot_star_t_Mstar(t, params):
 
 def M_dot_star_linear_scaling(t, params):
     MdotH16 = 10**(((-1.32)-(1.07)*np.log10(t/yr_to_Myr)))*M_sun_yr_to_M_E_Myr
-    return MdotH16*(params.star_mass/(1*const.M_sun.cgs.to(u.M_earth).value))
+    return MdotH16*(params.star_mass/(0.7*const.M_sun.cgs.to(u.M_earth).value))
 
 def M_dot_star_quadratic_scaling(t, params):
     MdotH16 = 10**(((-1.32)-(1.07)*np.log10(t/yr_to_Myr)))*M_sun_yr_to_M_E_Myr
-    return MdotH16*(params.star_mass/(1*const.M_sun.cgs.to(u.M_earth).value))**2
+    return MdotH16*(params.star_mass/(0.7*const.M_sun.cgs.to(u.M_earth).value))**2
 
 def M_dot_star(t, params):
     """Gas accretion rate, can be time dependent or constant"""
@@ -400,7 +400,6 @@ def H_R_visc_Ida(position, mdot_star, params):
 
 def H_R_visc_Liu(position, mdot_star, params):
     """Viscous H/r from equation (10) in Liu et al. 2019"""
-    print("opacit ratio", params.disc_opacity/1e-2)
     return 0.034*(params.star_mass/M_sun_M_E)**(-5/16)*(mdot_star/(1e-8*M_sun_yr_to_M_E_Myr))**(1/4)*(params.alpha/1e-2)**(-1/8)*(position)**(-1/16)*(params.disc_opacity/1e-2)**(1/8)
 
 def H_R_visc_Lambrechts(position, mdot_star, params):
@@ -599,9 +598,6 @@ def Robin_2003_IMF(M_star):
         return M_star**(-3.0)
 
 
-
-
-
 def pebble_prod_line(time, params):
     """pebble production line according to eq 10 of LJ14"""
 
@@ -632,7 +628,7 @@ def estimate_initial_step_size(masses, positions, mdot, rdot):
 
 def planet_counter(simulations, parameters, sim_parameters, outer = False):
     """Counts the types of planets in the simulation"""
-    HJ_counter, WJ_counter, CG_counter, SE_counter, sub_E_counter, sub_giants_in_counter, sub_giants_out_counter, terr_in_counter, giant_counter, tot_planets_counter = 0,0,0,0,0,0,0,0,0,0
+    HJ_counter, WJ_counter, CG_counter, SE_counter, SE_sabotta_counter, sub_E_counter, sub_giants_in_counter, sub_giants_out_counter, terr_in_counter, giant_counter, tot_planets_counter = 0,0,0,0,0,0,0,0,0,0,0
     star_mass = []
     print("parameter",len(parameters))
     model =  parameters[0].H_r_model
@@ -654,6 +650,8 @@ def planet_counter(simulations, parameters, sim_parameters, outer = False):
 
             if 1<sim.mass[p,m_fin_idx].to(u.M_earth).value<10 and sim.position[p,m_fin_idx].to(u.au).value<1:
                 SE_counter +=1
+            if 1<sim.mass[p,m_fin_idx].to(u.M_earth).value<10 and 0.1<sim.position[p,m_fin_idx].to(u.au).value<0.4:
+                SE_sabotta_counter +=1
             if 0.01<sim.mass[p,m_fin_idx].to(u.M_earth).value<1:
                 if sim.position[p, m_fin_idx].to(u.au).value<0.1:
                     terr_in_counter +=1    
@@ -674,7 +672,7 @@ def planet_counter(simulations, parameters, sim_parameters, outer = False):
                 if 2<sim.position[p,m_fin_idx].to(u.au).value<10:
                     CG_counter +=1
     
-    dict_planets = {'model': model, 'HJ': HJ_counter, 'WJ': WJ_counter, 'CG': CG_counter, 'SE': SE_counter, 
+    dict_planets = {'model': model, 'HJ': HJ_counter, 'WJ': WJ_counter, 'CG': CG_counter, 'SE': SE_counter, 'SE_sabotta': SE_sabotta_counter,  
                     'sub_E':sub_E_counter, 'sub_giants_in':sub_giants_out_counter,'sub_giants_out':sub_giants_out_counter,
                     'sub_giants': sub_giants_in_counter+sub_giants_out_counter, 'terr_in': terr_in_counter, 
                     'terr_tot': terr_in_counter+sub_E_counter,  'giant': giant_counter, 'tot_planets': tot_planets_counter, 'star_mass': star_mass}
@@ -740,12 +738,13 @@ def idxs (time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration
 
 
 
-def kepler_3_law (period):
-    return ((const.G.cgs*const.M_sun.cgs/(4*np.pi**2)*period**2)**(1/3)).to(u.au)
+def kepler_3_law (period, star_mass):
+    """Kepler 3rd law in cgs"""
+    return ((const.G.cgs*star_mass*const.M_sun.cgs/(4*np.pi**2)*period**2)**(1/3)).to(u.au)
 
-def kepler_3_law_inverse(distance):
+def kepler_3_law_inverse(distance, star_mass):
     a_p = (distance*u.au).to(u.cm)
-    return np.sqrt(a_p**3*4*np.pi**2/(const.G.cgs*const.M_sun.cgs))
+    return np.sqrt(a_p**3*4*np.pi**2/(const.G.cgs*star_mass*const.M_sun.cgs))
 
 def radius_mass_exo(radius, rocky = True):
     if rocky:
@@ -753,8 +752,6 @@ def radius_mass_exo(radius, rocky = True):
     else:
         rho = 1* u.g/u.cm**3
     return (4/3*np.pi*radius**3*rho).to(u.M_earth)
-
-
 
 def MMSN (position):
     """Minimum mass solar nebula according to Hayashi 1981"""
@@ -770,6 +767,20 @@ def Fe_H_to_Z (Fe_H):
     f_dtf_solar = 0.0149 #Lodders 2003
     return f_dtf_solar*10**Fe_H
 
+################### NEW DISC MASS AND SIZE DEFINITION FUNCTIONS ####################
+def M_dot_gas_photoevaporation (params):
+    "Photoevaporation according to Owen et al. 2012"
+    star_mass = params.star_mass/M_sun_M_E
+    Lx = 10**(30.37+1.44*(star_mass))#keep it in erg/s
+    return 6.25e-9*(star_mass)**(-0.068)*(Lx/1e30)**(1/14)*M_sun_yr_to_M_E_Myr
+
+def t_s(R_0, time, params):
+    "disc characreritic evolution timescale according to Nielsen et al. 2025"
+    gamma = 3/2+3/7 #irradiated dic
+    H_R0 = H_R(R_0, M_dot_star(time, params), params)
+    c_s_R0 = H_R0*v_k(R_0, params)
+    nu_R0 = params.alpha*c_s_R0*H_R0
+    return 1/3*(2-gamma)**2*R_0**2/nu_R0
 
 ################## MICROLENSING FUNCTIONS ####################
 
@@ -836,7 +847,7 @@ def lensing_triangle_line_QS_space(q, eta, xi, Amax):
     return s_minus_out, s_plus_out, q_out
 
 
-def lensing_triangle_line_MA_space(M_p, M_l, D_s, D_l, eta, xi, Amax):
+def lensing_triangle_line_MA_space(M_p, M_l, D_s, D_l, eta_plus, eta_minus,q_min):
     """Lensing triangle in (M_p, a) space. Returns the a_minus and a_plus boundaries and the corresponding M_p_masked array. 
     Works when M_l is scalar or an array (same length as M_p).
     """
@@ -855,10 +866,9 @@ def lensing_triangle_line_MA_space(M_p, M_l, D_s, D_l, eta, xi, Amax):
     M_l = M_l[order]
     M_p = M_p[order]
 
-    q_min = xi / Amax
     ratio = q / q_min
-    s_plus = ratio ** eta
-    s_minus = ratio ** (-eta)
+    s_plus = ratio ** eta_plus
+    s_minus = ratio ** (-eta_minus)
 
 
     mask = q >= q_min 

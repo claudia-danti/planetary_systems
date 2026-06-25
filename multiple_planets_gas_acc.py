@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional, Union, Callable
 
 import numpy as np
 import astropy.units as u
@@ -39,11 +39,12 @@ class Params:
     star_radius: float = field(init=False)  # Will be set in __post_init__  # float = (const.R_sun).to(u.au).value
     star_luminosity: float = field(init=False)  # Will be set in __post_init__  # (const.L_sun.cgs).value *erg_s_to_au_M_E_Myr
     star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1kG
-    M_dot_gas_star: Optional[Union[float, str]] = "star_mass_linear" #Hartmann_2016, Liu_2019, star_mass_linear, star_mass_quadratic
-    
+    M_dot_gas_star: Union[float, str] = "star_mass_linear" #Hartmann_2016, Liu_2019, star_mass_linear, star_mass_quadratic
+    mdot_star_func: Callable[[float], float] = field(init=False, repr=False)
+
     #disc parameters
     iso_filtering: float = 1
-    tau_disc: float= (3 * u.Myr).value
+    tau_disc: float= (5 * u.Myr).value
     disc_opacity: float = 1e-2
     Z: float = 0.01 
     alpha: float = 1e-2
@@ -82,6 +83,7 @@ class Params:
         # Set star_luminosity as a function of star_mass
         self.star_luminosity = L_star(self.star_mass)
         self.star_radius = R_star(self.star_mass)
+        self.mdot_star_fn = self._build_mdot_star_func()
 
     def update_alpha_z_iceline(self, pos, iceline_radius):
         if pos < iceline_radius:
@@ -101,6 +103,17 @@ class Params:
         else:
             self.v_frag = self.v_frag_out
 
+    #to try to speed up the code and not have to check every time M_dot_star gets called        
+    def _build_mdot_star_fn(self):
+            if self.M_dot_gas_star == "Liu_2019":
+                return lambda t: M_dot_star_t_Mstar(t, self)
+            if self.M_dot_gas_star == "Hartmann_2016":
+                return M_dot_star_t
+            if self.M_dot_gas_star == "star_mass_linear":
+                return lambda t: M_dot_star_linear_scaling(t, self)
+            if self.M_dot_gas_star == "star_mass_quadratic":
+                return lambda t: M_dot_star_quadratic_scaling(t, self)
+            return lambda t: self.M_dot_gas_star
 
 @dataclass
 class SimulationParams:
@@ -218,7 +231,7 @@ def evolve_system(
     flux_ratio = np.zeros(masses.shape) # ratio of the accreted pebble flux and the incoming flux
     
     # disc quantities related to time only
-    mdot_star= M_dot_star(times, params)
+    mdot_star = params.mdot_star_func(times)    
     R_mag_cav = r_magnetic_cavity(mdot_star, params)
      ###### NOMINAL FLUX ########
     F0_nominal = flux_dtg_t(mdot_star, params)
@@ -235,12 +248,12 @@ def evolve_system(
             params.update_alpha_frag_iceline(positions[i], iceline(mdot_star, 170, params))
         if params.iceline_v_frag_change:
             params.update_v_frag_iceline(positions[i], iceline(mdot_star, 170, params))
-            print("v_frag planet "+str(positions[i])[:4], params.v_frag*(u.au/u.Myr).to(u.m/u.s))
+            #print("v_frag planet "+str(positions[i])[:4], params.v_frag*(u.au/u.Myr).to(u.m/u.s))
              
         if params.iceline_flux_change:
             if params.iceline_radius == None:
                 iceline_radius = iceline(mdot_star, 170, params)
-                print("current iceline position: ", iceline_radius)
+                #print("current iceline position: ", iceline_radius)
             else:
                 iceline_radius = params.iceline_radius
             F0 = np.where(positions[i] < iceline_radius, 1/2, 1)*F0_nominal
@@ -251,8 +264,8 @@ def evolve_system(
         H_r = H_R(positions[i], mdot_star, params)
         Sigma_gas = sigma_gas_steady_state(positions[i], H_r, mdot_star, params)
 
-        print("Planet "+str(positions[i])[:4]+", F0: ", F0*(u.earthMass/u.Myr))
-        print("Planet "+str(positions[i])[:4]+", M_dot_star: ", mdot_star*(u.M_earth/u.Myr).to(u.M_sun/u.yr))
+        # print("Planet "+str(positions[i])[:4]+", F0: ", F0*(u.earthMass/u.Myr))
+        # print("Planet "+str(positions[i])[:4]+", M_dot_star: ", mdot_star*(u.M_earth/u.Myr).to(u.M_sun/u.yr))
 
         # to flag the accretion regime we are in
         peb_acc._set_planet_id (i)
@@ -270,7 +283,7 @@ def evolve_system(
 
         # option for migration
         if migration:
-            print("Sigma gas:", Sigma_gas)
+            #print("Sigma gas:", Sigma_gas)
                 
             R_dot[i] = dR_dt_both(times, positions[i], masses[i], H_r, Sigma_gas, params) #includes type II prescription
 
@@ -325,10 +338,10 @@ def evolve_system(
         else:
             gas_accretion_dict = None #just otherwise the dict is not defined
 
-        # The planets should stop at Jupiter mass
-        dead_by_mass = masses[i] > const.M_jup.to(u.M_earth).value
-        M_dot[i, dead_by_mass] = 0  
-        R_dot[i, dead_by_mass] = 0
+        # # The planets should stop at Jupiter mass
+        # dead_by_mass = masses[i] > const.M_jup.to(u.M_earth).value
+        # M_dot[i, dead_by_mass] = 0  
+        # R_dot[i, dead_by_mass] = 0
 
         flux_on_planet[i] = F0 * flux_reduction
         filter_frac[i] = np.clip(M_dot[i] / flux_on_planet[i], 0, 1)  # filtering fraction due to the planet i is restricted between [0,1]
@@ -341,7 +354,7 @@ def evolve_system(
         if filtering:
             flux_reduction *= (1 - filter_frac[i])  # amount that is multiplied by F0 to get F_i
         
-        print("dust to gas ratio, planet "+str(positions[i])[:4], sigma_peb[i]/sigma_gas[i])
+        #print("dust to gas ratio, planet "+str(positions[i])[:4], sigma_peb[i]/sigma_gas[i])
 
     if np.any(np.isnan(filter_frac)):
         print("Nan in ff")

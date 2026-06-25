@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import pandas as pd
 import sys
+import os
 from functions import *
 import matplotlib.gridspec as gridspec
 import matplotlib as mpl
@@ -13,16 +14,19 @@ import matplotlib.ticker
 from matplotlib.ticker import ScalarFormatter, LogFormatter, LogLocator
 from matplotlib import colors
 import matplotlib.colors as mcolors
+from scipy.integrate import cumtrapz
+from scipy.stats import loguniform
+import sim_loader as sim_load
 
 
 ########## GENERIC PLOTTING FUNCTION, FOR M(t), ff(t), GROWTH TRACKS #####################
 # Don't require SimulationResults() objects
 
-def idxs (axs, time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration, **kwargs):
+def idxs (time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration, **kwargs):
     #Creates the index dictionary
 
     idx_or_last = lambda fltr: np.argmax(fltr) if np.any(fltr) else fltr.size
-    isolation_mass = M_peb_iso(H_R(position, M_dot_star(time, params),params), params)
+    isolation_mass = M_peb_iso(H_R(position, M_dot_star(time, params), params), params)
     stop_idx = np.argmin(position) #returns the position of the min value of position
     stop_mass_idx = np.any(np.where(dM_dt == 0)[0][0]) if np.any(np.where(dM_dt == 0)[0]) else dM_dt.size
     iso_idx = np.argmax(mass > isolation_mass)
@@ -826,9 +830,7 @@ def all_x_ticks(axs, num_ticks):
     x_minor = mpl.ticker.LogLocator(base = 10.0, subs = np.arange(1.0, 10.0) * 0.1, numticks = num_ticks)
     axs.xaxis.set_minor_locator(x_minor)
     axs.xaxis.set_minor_formatter(mpl.ticker.NullFormatter())
-    plt.tick_params(axis = 'both', which = 'major', size = 10)
-    plt.tick_params(axis = 'both', which = 'minor', size = 5)
-
+  
 
 def acc_regimes_lines(axs, sim, params, sim_params):
     """To label on the lines the accretion regimes"""
@@ -982,8 +984,8 @@ def HD219134 (axs, color):
     axs.plot(a_p0, m0, "+", markersize=10, color = color, zorder = 100)
 
 
-def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = True, ss_moons = True, roman_sensitivity= False):
-    """"Script to plot the roman sensitivity curves from https://github.com/mtpenny/wfirst-ml-figures/tree/master/sensitivity"""
+def plot_roman_sensitivity(fig, ax, roman = True, kepler = False, solar_system = False, ss_moons = False, roman_sensitivity= False, cax=None, plot_cbar_sensitivity=True, cbar_label=""):
+    """"Script to plot the roman sensitivity curves from https://gi5thub.com/mtpenny/wfirst-ml-figures/tree/master/sensitivity"""
     
     import json
     #Add the Solar System planet images
@@ -1005,8 +1007,8 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
         for x0, y0 in zip(x, y):
             ab = AnnotationBbox(im, (x0, y0), xycoords='data', frameon=False)
             artists.append(ax.add_artist(ab))
-        ax.update_datalim(np.column_stack([x, y]))
-        ax.autoscale()
+        # ax.update_datalim(np.column_stack([x, y]))
+        # ax.autoscale()
         return artists
         
 
@@ -1050,8 +1052,10 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
 
         fittedx = np.arange(np.log10(amin)-1,np.log10(amax)+1,0.05)
         fittedline=nroalt(fittedx,nroaltpars)
-        ax.plot(10**fittedx,10**fittedline,'-',color='lightgrey',lw=3)
-        ax.text(20,0.17,'$Roman$',color='lightgrey',rotation=45)
+        ax.plot(10**fittedx,10**fittedline,'-',color="#FFC800",lw=3)
+        #ax.plot(10**fittedx,10**fittedline,'-',color="cyan",lw=3)
+
+        #ax.text(29,0.28,'$Roman$',color='black',rotation=45)
     if roman_sensitivity:
         ### ROMAN SENSITIVITY CONTOURS
         smap = np.loadtxt('roman_sensitivity/all.magrid.NRO.layout_7f_3_covfac.52.filled') 
@@ -1076,13 +1080,20 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
         norm = mcolors.BoundaryNorm(levels, discrete_cmap.N)
         cf = ax.contour(X, Y, z, levels=levels, cmap=discrete_cmap, norm=norm ,vmin=-1,vmax=8  )
         ### end my messing around with colors
+        if plot_cbar_sensitivity:
+            # cmap = mpl.colormaps["hot"].reversed()(np.linspace(0, 1, N))
+            # #cmap = plt.get_cmap('hot')
+            # cf = ax.contour(X,Y,z,cmap=cmap,levels=[-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5],vmin=-1,vmax=8)
+            if cax is not None:
+                cbar = fig.colorbar(cf, cax=cax, label=cbar_label, ticks=[-1,0,1,2,3,4])
+                cbar.set_label(cbar_label, size=20)  # Set label size
+                cbar.ax.tick_params(labelsize=15)  # Set tick label size
+                cbar.ax.tick_params(axis="both", which="major", size=13)
+                cbar.ax.tick_params(axis="both", which="minor", size=9)
 
-        # cmap = mpl.colormaps["hot"].reversed()(np.linspace(0, 1, N))
-        # #cmap = plt.get_cmap('hot')
-        # cf = ax.contour(X,Y,z,cmap=cmap,levels=[-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5],vmin=-1,vmax=8)
-        cbar = plt.colorbar(cf,ax=ax,label='$Roman$ Sensitivity $-$ the number of planet detections\n expected if there is 1 planet per star at $(a,M_{\\rm p})$',ticks=[-1,0,1,2,3,4])
-        cbar.ax.set_yticklabels(['0.1','1','10','100','1000','10000'])
-
+            else:
+                cbar = fig.colorbar(cf, ax=ax, label='$Roman$ Sensitivity $-$ the number of planet detections\n expected if there is 1 planet per star at $(a,M_{\\rm p})$', ticks=[-1,0,1,2,3,4])
+            cbar.ax.set_yticklabels(['0.1','1','10','100','1000','10000'])
     if kepler:
         ### KEPLER SENSITIVITY LINE
         #The Kepler line
@@ -1121,17 +1132,21 @@ def plot_roman_sensitivity(fig, ax, roman = True, kepler = True, solar_system = 
     #plt.savefig("figures/roman_sensitivity", dpi=300)
 
 
-def boxes(axs):
+def boxes(axs, r_in, labels = False, **kwargs):
     # #SE
-    axs.fill_betweenx([1, 20], 0.01, 1, color='brown', alpha=0.1)
+    axs.fill_betweenx([1, 10], r_in, 1, color='brown', alpha=0.1)
     #terrestrial embryo
     axs.fill_betweenx([0.01, 1], 0.1, 10, color='black', alpha=0.1)
     # gas giants
     axs.fill_betweenx([1e2, 6e3], 0.01, 0.1, color='aquamarine', alpha=0.1)
     axs.fill_betweenx([1e2, 6e3], 0.1, 2, color='gold', alpha=0.1)
     axs.fill_betweenx([1e2, 6e3], 2, 10, color='purple', alpha=0.1)
-
-
+    if labels:
+        axs.text(0.7, 6, 'SE', color='brown', fontsize=12, rotation=0, va='center', ha='center', **kwargs)
+        axs.text(5, 0.5, 'sub-E', color='black', fontsize=12, rotation=0, va='center', ha='center', **kwargs)
+        axs.text(0.015, 3e3, 'HJ', color='#00CC88', fontsize=12, rotation=0, va='center', ha='center', **kwargs)
+        axs.text(0.15, 3e3, 'WJ', color='gold', fontsize=12, rotation=0, va='center', ha='center', **kwargs)
+        axs.text(3, 3e3, 'CG', color='purple', fontsize=12, rotation=0, va='center', ha='center', **kwargs)
 #observational yields
 def Bonfils13 (axs, legend = True):
     """Bonfis et al. 2013 for Mstar<0.3M_sun"""
@@ -1358,6 +1373,128 @@ def Kunimoto20 (axs, F = False, G=True, K=True, SE = True, HJ=False, legend = Tr
 
     return
 
+def Johnson10 (axs, legend = True):
+    """Johnson et al. 2010 for M <0.6Msun, within 2.5 au"""
+    # DUBBIO, viene da Pan et al. 2025
+    # x, y corrodinates of the dot and error bars
+    CG_x_johnson = 0.3 #star mass for the plot
+    CG_y_johnson = 0.034
+    #asymmetric error bars (values must be positive)
+    xerr_bonfis = np.array([[0.2],[0.3]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_bonfis = np.array([[0.009], [0.02]]) # Vertical error(lower and upper)
+    axs.errorbar(CG_x_johnson, CG_y_johnson, xerr=xerr_bonfis, yerr=yerr_bonfis, fmt='o', color="#33BBFF", capsize = 5,  label='Johnson et al. 2010')
+    if legend:
+        axs.legend()
+
+    return
+
+
+def Montet14 (axs, legend = True):
+    """Montet et al. 2014 for M dwarfs,  M_p =1-13 MJ within 20 au"""
+    # DUBBIO, viene da Pan et al. 2025
+    # x, y corrodinates of the dot and error bars
+    CG_x_montet = 0.4 #star mass for the plot
+    CG_y_montet = 0.065
+    #asymmetric error bars (values must be positive)
+    xerr_bonfis = np.array([[0.3],[0.2]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_bonfis = np.array([[0.03], [0.03]]) # Vertical error(lower and upper)
+    axs.errorbar(CG_x_montet, CG_y_montet, xerr=xerr_bonfis, yerr=yerr_bonfis, fmt='o', color='#8B33FF', capsize = 5,  label='Montet et al. 2014')
+    if legend:
+        axs.legend()
+
+    return
+
+def Bonomo23 (axs, legend = True):
+    """Bonomo et al. 2023 for Msun"""
+    # DUBBIO, viene da Pan et al. 2025
+    # x, y corrodinates of the dot and error bars
+    CG_x_bonomo = 1 #star mass for the plot
+    CG_y_bonomo = 0.093
+    #asymmetric error bars (values must be positive)
+    xerr_bonomo = np.array([[0.2],[0.]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_bonomo = np.array([[0.029], [0.077]]) # Vertical error(lower and upper)
+    axs.errorbar(CG_x_bonomo, CG_y_bonomo, xerr=xerr_bonomo, yerr=yerr_bonomo, fmt='o', color="#AF2BDB", capsize = 5,  label='Bonomo et al. 2023')
+    if legend:
+        axs.legend()
+
+    return
+
+def Wittenmyer21 (axs, legend = True):
+    """Bonomo et al. 2023 for Msun"""
+    # DUBBIO, viene da Pan et al. 2025
+    # x, y corrodinates of the dot and error bars
+    CG_x_wittenmyer = 1 #star mass for the plot
+    CG_y_wittenmyer = 0.0673
+    #asymmetric error bars (values must be positive)
+    xerr_wittenmyer = np.array([[0.2],[0.]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_wittenmyer = np.array([[0.0113], [0.0209]]) # Vertical error(lower and upper)
+    axs.errorbar(CG_x_wittenmyer, CG_y_wittenmyer, xerr=xerr_wittenmyer, yerr=yerr_wittenmyer, fmt='o', color="#DB2B8F", capsize = 5,  label='Wittenmyer et al. 2021')
+    if legend:
+        axs.legend()
+
+    return
+
+
+def Hirsch21 (axs, legend = True):
+    """Bonomo et al. 2023 for Msun"""
+    # DUBBIO, viene da Pan et al. 2025
+    # x, y corrodinates of the dot and error bars
+    CG_x_hirsch = 1 #star mass for the plot
+    CG_y_hirsch = 0.018
+    #asymmetric error bars (values must be positive)
+    xerr_hirsch = np.array([[0.2],[0.]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_hirsch = np.array([[0.004], [0.003]]) # Vertical error(lower and upper)
+    axs.errorbar(CG_x_hirsch, CG_y_hirsch, xerr=xerr_hirsch, yerr=yerr_hirsch, fmt='o', color="#DB2B2B", capsize = 5,  label='Hirsch et al. 2021')
+    if legend:
+        axs.legend()
+
+    return
+
+
+def Fulton21 (axs, legend = True):
+    """Fulton et al. 2021 for different stellar masses"""
+    # DUBBIO, viene da Pan et al. 2025
+    # x, y corrodinates of the dot and error bars
+    CG_x_fulton = 0.6 #star mass for the plot
+    CG_y_fulton = 0.005
+    #asymmetric error bars (values must be positive)
+    xerr_fulton = np.array([[0.1],[0.1]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_fulton = np.array([[0.00500], [0.0293]]) # Vertical error(lower and upper)
+    axs.errorbar(CG_x_fulton, CG_y_fulton, xerr=xerr_fulton, yerr=yerr_fulton, fmt='o', color="#2B3FDB", capsize = 5,  label='Fulton et al. 2021')
+
+    CG_x_fulton = 0.8 #star mass for the plot
+    CG_y_fulton = 0.0626
+    #asymmetric error bars (values must be positive)
+    xerr_fulton = np.array([[0.1],[0.1]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_fulton = np.array([[0.014], [0.0257]]) # Vertical error(lower and upper)
+    axs.errorbar(CG_x_fulton, CG_y_fulton, xerr=xerr_fulton, yerr=yerr_fulton, fmt='o', color="#2B3FDB", capsize = 5)
+
+    CG_x_fulton = 1 #star mass for the plot
+    CG_y_fulton = 0.1604
+    #asymmetric error bars (values must be positive)
+    xerr_fulton = np.array([[0.1],[0.]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_fulton = np.array([[0.0234], [0.0369]]) # Vertical error(lower and upper)
+    axs.errorbar(CG_x_fulton, CG_y_fulton, xerr=xerr_fulton, yerr=yerr_fulton, fmt='o', color="#2B3FDB", capsize = 5)
+
+    if legend:
+        axs.legend()
+
+    return
+
+def Ribas23 (axs, legend = True):
+    """Bonomo et al. 2023 for Msun"""
+    # DUBBIO, viene da Pan et al. 2025
+    # x, y corrodinates of the dot and error bars
+    CG_x_hirsch =  0.4 #star mass for the plot
+    CG_y_hirsch = 0.03
+    #asymmetric error bars (values must be positive)
+    xerr_hirsch = np.array([[0.3],[0.2]]) # Horizontal error (goes down to 0.1 Msun)
+    yerr_hirsch = np.array([[0.01], [0.01]]) # Vertical error(lower and upper)
+    axs.errorbar(CG_x_hirsch, CG_y_hirsch, xerr=xerr_hirsch, yerr=yerr_hirsch, fmt='o', color="#FFE601", capsize = 5,  label='Ribas et al. 2023')
+    if legend:
+        axs.legend()
+
+    return
 
 def Pan25(axs, SE = True, WHG = True, CG =True,legend = True):
     """Pan et al. 2025, simulations"""
@@ -1375,3 +1512,92 @@ def Pan25(axs, SE = True, WHG = True, CG =True,legend = True):
         axs.plot(Mstar, f_CG, linestyle ='-', color='black', label='Pan et al. 2025')
 
     return
+
+
+
+
+def tickmarks_and_labels(axs, xlabel, ylabel, direction = 'out', xlim=None, ylim=None):
+    """Sets the tickmarks and labels for the mass vs semi-major axis plots"""
+
+    axs.set_xlabel(xlabel, fontsize=32, labelpad=15)
+    axs.set_ylabel(ylabel, fontsize=32, labelpad=10)
+    axs.tick_params(axis="x", which="major", direction=direction, size=13, labelsize=22,pad=12)
+    axs.tick_params(axis="y", which="major", direction=direction, size=13, labelsize=22,pad=7)
+
+    axs.tick_params(axis="both", which="minor", direction=direction, size=9)
+    axs.set_xscale("log")
+    axs.set_yscale("log")
+    if xlim is not None:
+        axs.set_xlim(xlim)
+    if ylim is not None:
+        axs.set_ylim(ylim)
+
+
+def Ml_samples_selection(N, mstar_min, mstar_max,which_imf='Chabrier2005'):
+    # random sample initial star masses from the IMF of Penny (disc)
+    if which_imf in ['Chabrier2005', 'Kroupa', 'Robin2003']:
+        Mstars = np.geomspace(mstar_min, mstar_max, N)
+        IMF_pdf = np.zeros(N)
+        MC_random = np.random.uniform(0, 1, N)
+
+        for i in range(0, N):
+            if which_imf == 'Chabrier2005':
+                IMF_pdf[i] = Chabrier_2005_IMF_pdf(Mstars[i])
+            if which_imf == 'Kroupa':
+                IMF_pdf[i] = Kroupa_IMF_pdf(Mstars[i])    
+            if which_imf == 'Robin2003':
+                IMF_pdf[i] = Robin_2003_IMF(Mstars[i])
+
+
+        # Assume x is your array (can be linear or log-spaced), pdf is the unnormalized PDF
+        dx = np.diff(Mstars)
+        dx = np.append(dx, dx[-1])  # Make dx same length as x
+        # Compute normalization constant (area under curve)
+        area = np.sum(IMF_pdf * dx)
+        # Normalize
+        IMF_pdf_norm = IMF_pdf / area
+        # sample the cdf from the normalized PDF
+        IMF_cdf = cumtrapz(IMF_pdf_norm, Mstars, initial=0)
+        IMF_cdf /= IMF_cdf[-1]
+        Ml_samples = np.interp(MC_random, IMF_cdf, Mstars) * const.M_sun.to(u.M_earth).value
+
+    elif which_imf == 'loguniform':
+        M_l_min = 0.1 * u.M_sun.to(u.M_earth)
+        M_l_max = 100 * u.M_sun.to(u.M_earth)
+        seed = 3
+        rng = np.random.default_rng(seed)   # pass rng or int to random_state
+        Ml_samples = loguniform(M_l_min, M_l_max).rvs(size=N, random_state=rng)
+    elif which_imf == 'constant':
+        Ml_samples = 0.2 * u.M_sun.to(u.M_earth) * np.ones(N)
+    return Ml_samples
+
+
+
+# Function to load simulations and compute planet_dict
+def load_simulations_and_planet_dict(folder_paths, H_r_model, simulations, parameters, sim_parameters, planet_dicts):
+    for folder_path, H_r_model in zip(folder_paths, H_r_model):
+        # List all files in the given folder
+        all_files = os.listdir(folder_path)
+        # Create the list of names of the sim, sim_params, and params files
+        sim_filenames = [os.path.join(folder_path, f) for f in all_files if f.startswith('simulation')]
+        sim_params_filenames = [os.path.join(folder_path, f) for f in all_files if f.startswith('sim_params') ]
+        params_filenames = [os.path.join(folder_path, f) for f in all_files if f.startswith('params')]
+        print("Number of files in folder:", len(all_files))
+        print("Number of simulation files:", len(sim_filenames))
+        # Sort the filenames based on the initial time
+        sim_filenames.sort(key=sim_load.extract_initial_time)
+        sim_params_filenames.sort(key=sim_load.extract_initial_time)
+        params_filenames.sort(key=sim_load.extract_initial_time)
+
+        # Load the simulations, sim_params, and params
+        simulations.append([sim_load.JSONtoSimRes(filename) for filename in sim_filenames])
+        sim_parameters.append([sim_load.load_sim_params(filename) for filename in sim_params_filenames])
+        params = [sim_load.load_params(filename) for filename in params_filenames]
+        parameters.append(params)
+        print("Number of simulations loaded:", len(simulations[-1]))
+
+        # Compute planet_dict for the folder
+        planet_dicts.append(planet_counter(simulations[-1], parameters[-1], sim_parameters[-1], outer=False))
+        print('planet dict:', planet_dicts[-1])
+
+
