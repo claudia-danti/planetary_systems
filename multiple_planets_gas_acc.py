@@ -3,7 +3,6 @@ from typing import Optional, Union, Callable
 import numpy as np
 import astropy.units as u
 import astropy.constants as const
-import json
 from scipy.integrate import solve_ivp
 from dataclasses import dataclass, field
 import os
@@ -241,7 +240,7 @@ def evolve_system(
     sigma_gas = np.zeros_like(masses) 
 
     # Flux on the planet i is obtained as: F_i = prod_0^i ( F0 * (1-f_i) )  with f_i filter fraction of the planet i
-    flux_reduction = np.ones(1)   # initial reduction of flux (1D vector of timestep -> is an intermediate quantity updated every timestep)
+    flux_reduction = 1   # initial reduction of flux (1D vector of timestep -> is an intermediate quantity updated every timestep)
     filter_frac = np.zeros(masses.shape)  # accreted pebble fraction on the planets (2D matrix [planets x times])
     flux_on_planet = np.zeros_like(masses) # accreted pebble fraction on the planets (2D matrix [planets x times])
     flux_ratio = np.zeros(masses.shape) # ratio of the accreted pebble flux and the incoming flux
@@ -284,8 +283,7 @@ def evolve_system(
         # to flag the gas accretion regime we are in
         gas_acc._set_planet_id (i)
         gas_acc.create_dict_planet_entry(i)
-
-        # Diff equation for mass growth [planets x times]
+        #Diff equation for mass growth [planets x times]
         M_dot[i], sigma_peb[i], sigma_gas[i], acc_regimes = peb_acc.dMc_dt_f(times, masses[i], positions[i], mdot_star, H_r, Sigma_gas, F0, flux_reduction, params)
 
         # delaying the embryo
@@ -438,10 +436,10 @@ def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params, o
     # Create the output directory if it doesn't exist
     os.makedirs(output_folder, exist_ok=True)
 
-    # Construct file paths
-    sim_filename = os.path.join(output_folder, 'simulation_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'_Z_'+str(params.Z)+'.json')
-    sim_params_filename = os.path.join(output_folder, 'sim_params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'_Z_'+str(params.Z)+'.json')
-    params_filename = os.path.join(output_folder, 'params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'_Z_'+str(params.Z)+'.json')
+    # # Construct file paths
+    # sim_filename = os.path.join(output_folder, 'simulation_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'_Z_'+str(params.Z)+'.json')
+    # sim_params_filename = os.path.join(output_folder, 'sim_params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'_Z_'+str(params.Z)+'.json')
+    # params_filename = os.path.join(output_folder, 'params_'+str(params.H_r_model)+'_e_el_'+str(params.epsilon_el)+'_vfrag_'+str(((params.v_frag*u.au/u.Myr).to(u.m/u.s)).value)+'_planets_'+str(sim_params.nr_planets)+'_t0_'+str(sim_params.t0[-1])+'_N_steps'+str(sim_params.N_step)+'_Mstar_'+str((params.star_mass*u.M_earth).to(u.M_sun).value)+'_Z_'+str(params.Z)+'.json')
 
     # Write the result to hdf5 files
     save_simulation_hdf5(simulation, params, sim_params, output_folder)    

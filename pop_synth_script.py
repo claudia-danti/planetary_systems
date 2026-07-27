@@ -3,25 +3,11 @@ import multiple_planets_gas_acc as code_gas
 import functions_pebble_accretion as peb
 from functions import *
 import functions_plotting as plot
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 import astropy.units as ub
 import pandas as pd
-from matplotlib.ticker import ScalarFormatter, LogFormatter, LogLocator, MultipleLocator, AutoMinorLocator
-from matplotlib import cm, ticker
-from matplotlib import colors
-import matplotlib.gridspec as gridspec
-import matplotlib.patches as patch
-from matplotlib.offsetbox import AnchoredText
-from matplotlib.patches import Patch
-from matplotlib.lines import Line2D
-import matplotlib.lines as mlines 
 import scipy.stats as stats
 import multiprocessing as mp
-from scipy.integrate import cumtrapz
-
-color = mpl.colormaps["YlOrRd"].reversed()(np.linspace(0, 0.7, code_gas.sim_params.nr_planets))
-
+from scipy.integrate import cumulative_trapezoid as cumtrapz
 
 # disc parameters
 params_dict = {'St_const': None, 

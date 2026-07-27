@@ -4,17 +4,15 @@ import astropy.constants as const
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import pandas as pd
-import sys
 import os
 from functions import *
 import matplotlib.gridspec as gridspec
 import matplotlib as mpl
 import matplotlib.gridspec as gridspec
-import matplotlib.ticker
 from matplotlib.ticker import ScalarFormatter, LogFormatter, LogLocator
 from matplotlib import colors
 import matplotlib.colors as mcolors
-from scipy.integrate import cumtrapz
+from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.stats import loguniform
 import sim_loader as sim_load
 
