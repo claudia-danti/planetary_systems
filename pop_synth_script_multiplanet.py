@@ -2,23 +2,11 @@ import numpy as np
 import multiple_planets_gas_acc as code_gas
 import functions_pebble_accretion as peb
 from functions import *
-import functions_plotting as plot
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import astropy.units as ub
-import pandas as pd
-from matplotlib.ticker import ScalarFormatter, LogFormatter, LogLocator, MultipleLocator, AutoMinorLocator
-from matplotlib import cm, ticker
-from matplotlib import colors
-import matplotlib.gridspec as gridspec
-import matplotlib.patches as patch
-from matplotlib.offsetbox import AnchoredText
-from matplotlib.patches import Patch
-from matplotlib.lines import Line2D
-import matplotlib.lines as mlines 
 import scipy.stats as stats
 import multiprocessing as mp
-from scipy.integrate import cumtrapz
 from numpy.random import default_rng
 
 color = mpl.colormaps["YlOrRd"].reversed()(np.linspace(0, 0.7, code_gas.sim_params.nr_planets))
@@ -39,9 +27,9 @@ params_dict = {'St_const': None,
                 }
 
 
-output_folder = 'sims/gas_acc/stellar_masses/multiples/linear/surfheat/referee_report/multiples/filter/newnewnewnew'
+output_folder = 'sims/new/test2'
 N_steps = 5000 #number of steps of the sim 
-num_samples = 5
+num_samples = 100
 # Number of samples to generate
 seed = 35
 seed_t0 = 87
@@ -55,30 +43,6 @@ rng = np.random.default_rng(seed_Z)
 # Generate random Z values from a Gaussian distribution
 Fe_H_samples = rng.normal(mu, sigma, num_samples)
 Z_samples = Fe_H_to_Z(Fe_H_samples)  # Convert Fe/H samples to Z
-
-# # random sample initial star masses from the IMF
-# which = 'Chabrier2005' #'Kroupa'
-# Mstars = np.logspace(-2, 2, num_samples)
-# IMF_pdf = np.zeros(num_samples)
-# MC_random = np.random.uniform(0, 1, num_samples)
-
-# for i in range(0, num_samples):
-#     if which == 'Chabrier2005':
-#         IMF_pdf[i] = Chabrier_2005_IMF_pdf(Mstars[i])
-#     if which == 'Kroupa':
-#         IMF_pdf[i] = Kroupa_IMF_pdf(Mstars[i])    
-
-# # Assume x is your array (can be linear or log-spaced), pdf is the unnormalized PDF
-# dx = np.diff(Mstars)
-# dx = np.append(dx, dx[-1])  # Make dx same length as x
-# # Compute normalization constant (area under curve)
-# area = np.sum(IMF_pdf * dx)
-# # Normalize
-# IMF_pdf_norm = IMF_pdf / area
-# # sample the cdf from the normalized PDF
-# IMF_cdf = cumtrapz(IMF_pdf_norm, Mstars, initial=0)
-# IMF_cdf /= IMF_cdf[-1]
-# mstar_samples = np.interp(MC_random, IMF_cdf, Mstars)
 
 
 # Gaussian distribution of disc lifetime
