@@ -1,0 +1,19 @@
+hostname,n_planets_in_system,n_super_earths,n_cold_giants,sy_snum,st_mass,st_met,st_spectype,has_super_earth,has_cold_giant,has_both
+HD 219134,6,4,1,1,0.81,0.11,K3 V,True,True,True
+Kepler-139,5,1,1,1,1.078,0.35,,True,True,True
+Kepler-48,5,1,1,1,0.88,0.17,,True,True,True
+55 Cnc,5,1,1,2,1.015,0.39,G8 V,True,True,True
+HD 164922,4,1,1,1,0.926,0.18,,True,True,True
+Kepler-167,4,2,1,2,0.777,0.02,,True,True,True
+GJ 676 A,4,2,2,2,0.626,,,True,True,True
+HD 181433,3,1,2,1,0.86,,,True,True,True
+HIP 57274,3,1,1,1,0.29,0.01,K4 V,True,True,True
+TOI-201,3,1,1,1,1.32,,F,True,True,True
+WASP-132,3,1,1,1,0.789,0.15,K4 V,True,True,True
+HD 155918,2,1,1,1,1.03,,,True,True,True
+HD 215497,2,1,1,1,0.67,0.2,K3 V,True,True,True
+HD 217786,2,1,1,2,1.14,,,True,True,True
+GJ 2030,2,1,1,1,0.96,,,True,True,True
+HD 80653,2,1,1,1,1.15,0.255,G0 V,True,True,True
+HD 93351,2,1,1,1,0.94,,,True,True,True
+HD 137496,2,1,1,1,1.04,-0.03,G,True,True,True

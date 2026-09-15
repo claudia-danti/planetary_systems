@@ -41,8 +41,8 @@ def HDF5toSimRes(filename):
 
                 subdict = {}
  
-                for subkey in item.keys():
-                    print(type(subkey), repr(subkey), type(item[subkey]))            
+                # for subkey in item.keys():
+                #     print(type(subkey), repr(subkey), type(item[subkey]))            
 
 
                 for attr, value in item.attrs.items():

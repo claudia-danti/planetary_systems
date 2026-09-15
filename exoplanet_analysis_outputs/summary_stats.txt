@@ -1,0 +1,65 @@
+======================================================================
+CATALOGUE HOMOGENEITY BREAKDOWN
+======================================================================
+Raw rows in file (all solutions, all pipelines): 40,052
+Unique planets (hostname+pl_name):               6,336
+
+Rows by soltype (raw, before picking default solution):
+  Published Confirmed                              20,537
+  Kepler Project Candidate (q1_q17_dr25_sup_koi)    2,735
+  Kepler Project Candidate (q1_q16_koi)             2,722
+  Kepler Project Candidate (q1_q17_dr25_koi)        2,718
+  Kepler Project Candidate (q1_q17_dr24_koi)        2,701
+  Kepler Project Candidate (q1_q12_koi)             2,680
+  Kepler Project Candidate (q1_q8_koi)              2,307
+  Published Candidate                               2,196
+  TESS Project Candidate                            1,456
+
+After reducing to one row per planet (default_flag == 1):
+  total default rows: 6,336
+  Published Confirmed                               6,262
+  Kepler Project Candidate (q1_q17_dr25_koi)           70
+  TESS Project Candidate                                4
+
+-> 'confirmed' homogeneous science catalogue used below: 6,262 planets
+   (Published Confirmed only, one row per planet)
+
+======================================================================
+PLANET-LEVEL STATISTICS  (confirmed, default-solution catalogue)
+======================================================================
+Total confirmed planets analysed: 6,262
+Super-Earths (1.25-2.0 Re): 1,345  (21.5%)
+Cold giants (R>=6.0 Re & a>=1.0 AU): 789  (12.6%)
+
+======================================================================
+SYSTEM-LEVEL STATISTICS
+======================================================================
+Total host-star systems: 4,720
+Multi-planet systems:    1,024
+Systems with >=1 Super-Earth: 1,115 (23.6% of all systems)
+Systems with >=1 Cold Giant:  713 (15.1% of all systems)
+Systems with BOTH Super-Earth(s) AND Cold Giant(s): 18 (0.4% of all systems, 1.8% of multi-planet systems)
+
+Host-star metallicity ([Fe/H]) comparison:
+  Systems with Super-Earth + Cold Giant  n=  11  mean=+0.164  median=+0.170
+  All other systems                      n=3489  mean=+0.018  median=+0.020
+
+Systems with both a Super-Earth and a Cold Giant (showing up to 20 of 18):
+  HD 219134            planets=6   super-earths=4 cold-giants=1
+  Kepler-139           planets=5   super-earths=1 cold-giants=1
+  Kepler-48            planets=5   super-earths=1 cold-giants=1
+  55 Cnc               planets=5   super-earths=1 cold-giants=1
+  HD 164922            planets=4   super-earths=1 cold-giants=1
+  Kepler-167           planets=4   super-earths=2 cold-giants=1
+  GJ 676 A             planets=4   super-earths=2 cold-giants=2
+  HD 181433            planets=3   super-earths=1 cold-giants=2
+  HIP 57274            planets=3   super-earths=1 cold-giants=1
+  TOI-201              planets=3   super-earths=1 cold-giants=1
+  WASP-132             planets=3   super-earths=1 cold-giants=1
+  HD 155918            planets=2   super-earths=1 cold-giants=1
+  HD 215497            planets=2   super-earths=1 cold-giants=1
+  HD 217786            planets=2   super-earths=1 cold-giants=1
+  GJ 2030              planets=2   super-earths=1 cold-giants=1
+  HD 80653             planets=2   super-earths=1 cold-giants=1
+  HD 93351             planets=2   super-earths=1 cold-giants=1
+  HD 137496            planets=2   super-earths=1 cold-giants=1

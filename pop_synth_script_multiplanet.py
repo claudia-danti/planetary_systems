@@ -62,7 +62,7 @@ rng_cond = default_rng(26)
 for  Z in Z_samples:
     # planet embyos initial conditions
     a_p0_planets = stats.loguniform.rvs(R_in, R_out, size=num_planets, random_state = rng_cond)
-    a_p0_planets = np.sort(a_p0_planets)[::-1] #very important, the planets need to be outermost to innermost
+    a_p0_planets = np.sort(a_p0_planets)[::-1] # VERY IMPORTANT, the planets need to be outermost to innermost
     print("ap0", a_p0_planets)
     t0_samples = stats.uniform.rvs(loc=0.1, scale=0.9, size=num_planets, random_state = rng_cond)
 

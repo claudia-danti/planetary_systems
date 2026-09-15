@@ -5,7 +5,11 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import pandas as pd
 import scipy.integrate as integrate
-### UNITS AND CONVERSIONS ######
+from collections import Counter
+
+# ---------------------------------------------------------------------------
+# UNITS AND CONVERSIONS
+# ---------------------------------------------------------------------------
 # masses -> earth masses
 # times -> Myr
 # lengths -> au
@@ -27,6 +31,11 @@ kpc_to_au = (1*u.kpc).to(u.au).value
 c_AU_Myr = const.c.to(u.au/u.Myr).value #approx 1e10
 erg_s_to_au2_g_s = (1*u.erg/u.s).to(u.au**2*u.g/u.s**3).value
 @u.quantity_input
+
+
+# ---------------------------------------------------------------------------
+# BASIC FUNCTIONS FOR PEBBLES AND DICS
+# ---------------------------------------------------------------------------
 
 def omega_k(position, params) :
     """ Keplerian frequency """
@@ -131,7 +140,9 @@ def R_star(M_star):
     """Stellar radius according to Demircan & Kahraman 1991 """
     return 10**(0.003+ 0.724*np.log10(M_star/M_sun_M_E))*R_sun_au
 
-#### ICELINES #####
+# ---------------------------------------------------------------------------
+# ICELINE FUNCTIONS
+# ---------------------------------------------------------------------------
 # The iceline are computed where T_midplane = 170 K, based on the 
 def iceline_irr(T, params):
     """Exact calculation using (H/R)_irr = c_s/v_K, with (H/R)_irr from Ida et al.2016"""
@@ -152,7 +163,10 @@ def iceline(mdot_star, T, params):
     else:
         return np.maximum(iceline_irr(T, params), iceline_visc(mdot_star, T, params))
 
-#### STOKES NUMBER OF THE PARTICLE ######
+# ---------------------------------------------------------------------------
+# STOKES NUMBER FUNCTIONS
+# ---------------------------------------------------------------------------
+
 def st_d(H_r, params):
     """Drift limit using t_g = t_drift for a F=ZM_dot, Sigma_gas = M_dot/(3 pi alpha H Omega) and Sigma_peb = F/(2 pi r v_r), using St^2+1 = 1"""
     # N.B.: this one works just if F = Z*M_dot, for a more general F, use the st_drift_gen
@@ -229,10 +243,33 @@ def r_peb_from_st(st, position, H_r, sigma_gas, params):
         print("Stokes regime")
         return np.sqrt(9/4*st*lambda_mfp*rho_gas*H_r*position/(params.rho_gr))
 
-###### TIME DEPENDENT GAS ACCRETION ######
+
+# ---------------------------------------------------------------------------
+# GAS ACCRETION ONTO THE CENTRAL STAR FUNCTIONS
+# ---------------------------------------------------------------------------
+
 def M_dot_star_t(t):
     #Time dependent gas accretion rate accordin to Hartmann et al. 2016 (ann.rev.), lower limit
     return 10**(((-1.32)-(1.07)*np.log10(t/yr_to_Myr)))*M_sun_yr_to_M_E_Myr
+
+def M_dot_star_t_scatter(t, params):
+    """
+    Evaluate the Mdot-t relation at time(s) t, applying a FIXED
+    scatter offset (in dex) that is constant across all t.
+
+    Parameters
+    ----------
+    t : float or array
+        Age(s) in years (same convention as M_dot_star_t).
+    params : object
+        An object containing the simulation parameters, including the log offset.
+    Returns
+    -------
+    mdot : ndarray
+        Accretion rate(s) in M_E/Myr.
+    """
+    log_mdot_mean = -1.32 - 1.07 * np.log10(t / yr_to_Myr)
+    return 10**(log_mdot_mean + params.Mdot_star_scatter) * M_sun_yr_to_M_E_Myr
 
 def M_dot_star_t_Mstar(t, params):
     """Time and stellar mass dependent accretion rate, Eq. (1) Liu et al. 2019b"""
@@ -253,6 +290,8 @@ def M_dot_star(t, params):
         M_dot_gas = M_dot_star_t_Mstar(t, params)
     elif params.M_dot_gas_star == "Hartmann_2016":
         M_dot_gas = M_dot_star_t(t)
+    elif params.M_dot_gas_star == "Hartmann_2016_scatter":
+        M_dot_gas = M_dot_star_t_scatter(t, params)
     elif params.M_dot_gas_star == "star_mass_linear":
         M_dot_gas = M_dot_star_linear_scaling(t, params)
     elif params.M_dot_gas_star == "star_mass_quadratic":
@@ -262,7 +301,11 @@ def M_dot_star(t, params):
 
     return M_dot_gas
 
-###### GAS SURFACE DENSITIES ############
+
+# ---------------------------------------------------------------------------
+# GAS AND PEBBLE SURFACE DENSITY FUNCTIONS
+# ---------------------------------------------------------------------------
+
 def sigma_gas_irr(position, mdot_star, params):
     """Sigma gas for an irradiated disc, equation (13) from Ida et al. 2016"""
 
@@ -293,7 +336,7 @@ def sigma_peb_t(position, t, sigma_gas, params):
     return C * sigma_gas * omega_k(position, params) ** (-1 / 6) * t ** (-1 / 6)
 
 
-########### ratio of gap to gas surface density for type II migration ##########
+########### ratio of gap to gas surface density for I migration ##########
 def sigma_gap_sigma_gas(mass, H_r, params):
     """ratio between gap and gas surface density as in Johansen 2019 eq. 37"""
     return 1/(1+(mass/(2.3*M_peb_iso(H_r, params)))**2)
@@ -304,7 +347,10 @@ def sigma_gap_sigma_gas_gen(mass, H_r, params):
     return 1/(1+0.04*K)
 
 
-########## FLUXES #############
+# ---------------------------------------------------------------------------
+# PEBBLE FLUX FUNCTIONS
+# ---------------------------------------------------------------------------
+
 # This pebble flux is obtained through the computation of the pebble production line
 def flux_peb_prod_line(t, position, params):
     """pebble flux as in eq (14) pf LJ14, modified to have a 1/3 reduction when crossing the iceline"""
@@ -360,8 +406,10 @@ def flux_const(t, H_r,mdot_star, params):
 
     return F
 
+# ---------------------------------------------------------------------------
+# CONVERSION BETWEEN PEBBLE FLUX AND PEBBLE SURFACE DENSITY FUNCTIONS
+# ---------------------------------------------------------------------------
 
-########## CONVERSION FLUX <-> SIGMA #############
 ############ CAN have constant Stokes number #########
 # This function can be used with a constant Stokes number (St passed as an argument)
 def flux_from_sigma_general(position, H_r, sigma_peb, St, params):
@@ -388,7 +436,10 @@ def sigma_from_flux(position, flux, sigma_gas, params):
 
     return np.sqrt((2*flux*sigma_gas)/(np.sqrt(3)*np.pi*params.epsilon_p*position*v_k(position, params)))
 
-########## SCALE HEIGHTS #############
+# ---------------------------------------------------------------------------
+# DISC SCALE HEIGHT FUNCTIONS
+# ---------------------------------------------------------------------------
+
 def H_R_irr(position, params):
     """Irradiated disc prescription equation (10) in Ida et al. 16"""
     return 0.024*(params.star_luminosity/L_sun_au_M_E_Myr)**(1/7)*(params.star_mass/M_sun_M_E)**(-4/7)*(position)**(2/7)
@@ -443,7 +494,10 @@ def H_peb(St, position, H_r, params):
     return np.sqrt(params.alpha_z / (St+ params.alpha_z)) * H_gas
 
 
-######### TRANSITION MASSES, ISOLATION MASS, INITIAL MASS #################
+# ---------------------------------------------------------------------------
+# PEBBLE ACCRETION MASSES: TRANSITION MASSES, ISOLATION MASS, INITIAL MASS
+# ---------------------------------------------------------------------------
+
 ## maybe needs an update with the Bitsch one!
 def M_peb_iso(H_r, params):
     """pebble isolation mass according to Eq. 27 Liu et al. 2019"""
@@ -524,7 +578,10 @@ def L_star(M_star):
     #theoretically I should put +0.001 to match the Liu et al boundary conditions
     return ((M_star/M_sun_M_E)**(3/2))*(const.L_sun.cgs.to(u.au**2*u.M_earth/u.Myr**3).value)#(const.L_sun.cgs.value)*erg_s_to_au_M_E_Myr
 
-############## STELLAR IMFs ###################
+# ---------------------------------------------------------------------------
+# STELLAR IMFs
+# ---------------------------------------------------------------------------
+
 def Kroupa_IMF_pdf(M_star):
     """Kroupa IMF, equation (7) in Maschberger 2013, normalised between 0.01 and 150 solar masses"""
     k0=1
@@ -625,59 +682,111 @@ def estimate_initial_step_size(masses, positions, mdot, rdot):
     
     return initial_step_size
 
+# ---------------------------------------------------------------------------
+# PLANET CLASSIFICATION FUNCTIONS
+# ---------------------------------------------------------------------------
+def planet_classification(mass, position):
+    """
+    Classifies a planet based on its mass [M_earth] and position [au].
+ 
+    Note: 'SE_sabotta' (1-10 M_earth, 0.1-0.4 au) is a *narrower subset*
+    of 'SE' (1-10 M_earth, position < 1 au)
+    """
+    if 1 < mass < 10 and 0.1 < position < 0.4:
+        return 'SE_sabotta'
+    elif 1 < mass < 10 and position < 1:
+        return 'SE'
+    elif 0.01 < mass < 1:
+        return 'terr_in' if position < 0.1 else 'sub_E'
+    elif 20 < mass < 100:
+        return 'sub_giants_in' if position < 1 else 'sub_giants_out'
+    elif mass >= 100:
+        if 0.01 < position < 0.1:
+            return 'HJ'
+        elif 0.1 < position < 2:
+            return 'WG'
+        elif 2 < position < 10:
+            return 'CG'
+        else:
+            return 'giant_other'   # giant, but outside the defined position ranges
+    else:
+        return 'unclassified'
 
-def planet_counter(simulations, parameters, sim_parameters, outer = False):
+
+def planet_type_counter(simulations, parameters, sim_parameters, outer = False, per_planet = False):
     """Counts the types of planets in the simulation"""
-    HJ_counter, WJ_counter, CG_counter, SE_counter, SE_sabotta_counter, sub_E_counter, sub_giants_in_counter, sub_giants_out_counter, terr_in_counter, giant_counter, tot_planets_counter = 0,0,0,0,0,0,0,0,0,0,0
     star_mass = []
-    print("parameter",len(parameters))
     model =  parameters[0].H_r_model
+    type_counts = Counter() #new empty counter
+    planet_records = []
+
+    # loop all sims
     for i in range(len(simulations)):
         sim = simulations[i]
         params = parameters[i]
         sim_params = sim_parameters[i]
         star_mass.append(params.star_mass)
-        if outer:
-            first_planet = 1
-        else:
-            first_planet = 0
+        # option to exclude the outer giant in the counting
+        # (it was from Danti et al. 2025) 
+        first_planet = 1 if outer else 0
+        # loop all planets in the sim
         for p in range(first_planet, sim_params.nr_planets):
             idx = idxs (sim.time[p].value, sim.mass[p].value, sim.position[p].value, sim.filter_fraction[p], 
                             sim.dR_dt[p], sim.dM_dt[p], params, True)
             stop_mig_idx = idx['stop_mig_idx'].values[0]
-            tot_planets_counter +=1
             m_fin_idx = stop_mig_idx
 
-            if 1<sim.mass[p,m_fin_idx].to(u.M_earth).value<10 and sim.position[p,m_fin_idx].to(u.au).value<1:
-                SE_counter +=1
-            if 1<sim.mass[p,m_fin_idx].to(u.M_earth).value<10 and 0.1<sim.position[p,m_fin_idx].to(u.au).value<0.4:
-                SE_sabotta_counter +=1
-            if 0.01<sim.mass[p,m_fin_idx].to(u.M_earth).value<1:
-                if sim.position[p, m_fin_idx].to(u.au).value<0.1:
-                    terr_in_counter +=1    
-                else:
-                    sub_E_counter +=1
-            if 20<sim.mass[p,m_fin_idx].to(u.M_earth).value<100:
-                if sim.position[p,m_fin_idx].to(u.au).value<1:
-                    sub_giants_in_counter +=1
-                else:
-                    sub_giants_out_counter +=1
+            mass_earth = sim.mass[p, m_fin_idx].to(u.M_earth).value
+            position_au = sim.position[p, m_fin_idx].to(u.au).value
+            ptype = planet_classification(mass_earth, position_au)
+ 
+            type_counts[ptype] += 1 #count the planet type per each planet category
+ 
+            if per_planet:
+                planet_records.append({
+                    'sim_idx': i,
+                    'planet_idx': p,
+                    'model': model,
+                    'star_mass': params.star_mass,
+                    'planet_mass': mass_earth,
+                    'planet_position': position_au,
+                    'alpha_nu': params.alpha,
+                    'M_dot_star_downscale': params.M_dot_star_downscale,
+                    'kappa_envelope': params.kappa,
+                    'type': ptype,
+                })
 
-            if sim.mass[p,m_fin_idx].to(u.M_earth).value>=100:
-                giant_counter += 1
-                if 0.01<sim.position[p,m_fin_idx].to(u.au).value<0.1:
-                    HJ_counter +=1
-                if 0.1<sim.position[p,m_fin_idx].to(u.au).value<2:
-                    WJ_counter +=1
-                if 2<sim.position[p,m_fin_idx].to(u.au).value<10:
-                    CG_counter +=1
-    
-    dict_planets = {'model': model, 'HJ': HJ_counter, 'WJ': WJ_counter, 'CG': CG_counter, 'SE': SE_counter, 'SE_sabotta': SE_sabotta_counter,  
-                    'sub_E':sub_E_counter, 'sub_giants_in':sub_giants_out_counter,'sub_giants_out':sub_giants_out_counter,
-                    'sub_giants': sub_giants_in_counter+sub_giants_out_counter, 'terr_in': terr_in_counter, 
-                    'terr_tot': terr_in_counter+sub_E_counter,  'giant': giant_counter, 'tot_planets': tot_planets_counter, 'star_mass': star_mass}
-    
-    return dict_planets
+    # returns the planet records if per_planet is True, otherwise returns the aggregated counts
+    if per_planet:
+        return planet_records
+    # returns 0 if the key is not present in the counter
+    sub_giants_in = type_counts.get('sub_giants_in', 0)
+    sub_giants_out = type_counts.get('sub_giants_out', 0)
+    terr_in = type_counts.get('terr_in', 0)
+    sub_E = type_counts.get('sub_E', 0)
+    HJ = type_counts.get('HJ', 0)
+    WG = type_counts.get('WG', 0)
+    CG = type_counts.get('CG', 0)
+
+    # aggregated counts for the simulations
+    return {
+        'model': model,
+        'star_mass': params.star_mass,
+        'alpha_nu': params.alpha,
+        'M_dot_star_downscale': params.M_dot_star_downscale,
+        'kappa_envelope': params.kappa,
+        'HJ': HJ, 'WJ': WG, 'CG': CG,
+        'SE': type_counts.get('SE', 0),
+        'SE_sabotta': type_counts.get('SE_sabotta', 0),
+        'sub_E': sub_E,
+        'sub_giants_in': sub_giants_in,
+        'sub_giants_out': sub_giants_out,
+        'sub_giants': sub_giants_in + sub_giants_out,
+        'terr_in': terr_in,
+        'terr_tot': terr_in + sub_E,
+        'giant': HJ + WG + CG + type_counts.get('giant_other', 0),
+        'tot_planets': sum(type_counts.values()),
+    }
 
 
 def idxs (time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration, **kwargs):
@@ -738,36 +847,9 @@ def idxs (time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration
 
 
 
-def kepler_3_law (period, star_mass):
-    """Kepler 3rd law in cgs"""
-    return ((const.G.cgs*star_mass*const.M_sun.cgs/(4*np.pi**2)*period**2)**(1/3)).to(u.au)
-
-def kepler_3_law_inverse(distance, star_mass):
-    a_p = (distance*u.au).to(u.cm)
-    return np.sqrt(a_p**3*4*np.pi**2/(const.G.cgs*star_mass*const.M_sun.cgs))
-
-def radius_mass_exo(radius, rocky = True):
-    if rocky:
-        rho = 5.5* u.g/u.cm**3
-    else:
-        rho = 1* u.g/u.cm**3
-    return (4/3*np.pi*radius**3*rho).to(u.M_earth)
-
-def MMSN (position):
-    """Minimum mass solar nebula according to Hayashi 1981"""
-    return (1700*(position)**(-3/2)*u.g/u.cm**2).to(u.M_earth/u.au**2)
-
-def Z_to_Fe_H (Z):
-    """Fe/H to Z relation according to Burn 2021"""
-    f_dtf_solar = 0.0149 #Lodders 2003
-    return np.log10(Z/f_dtf_solar)
-
-def Fe_H_to_Z (Fe_H):
-    """Z to Fe/H relation according to Burn 2021"""
-    f_dtf_solar = 0.0149 #Lodders 2003
-    return f_dtf_solar*10**Fe_H
-
-################### NEW DISC MASS AND SIZE DEFINITION FUNCTIONS ####################
+# ---------------------------------------------------------------------------
+# NEW DISC MASS AND PHOTOEVAPORATION FUNCTIONS
+# ---------------------------------------------------------------------------
 def M_dot_gas_photoevaporation (params):
     "Photoevaporation according to Owen et al. 2012"
     star_mass = params.star_mass/M_sun_M_E
@@ -782,7 +864,9 @@ def t_s(R_0, time, params):
     nu_R0 = params.alpha*c_s_R0*H_R0
     return 1/3*(2-gamma)**2*R_0**2/nu_R0
 
-################## MICROLENSING FUNCTIONS ####################
+# ---------------------------------------------------------------------------
+# MICROLENSING FUNCTIONS
+# ---------------------------------------------------------------------------
 
 def R_Einstein(M_l, D_s, D_l):
     """Einstein radius according to Eq: 11 Gaudi review"""
@@ -916,4 +1000,41 @@ def lensing_triangle_sensitivity_Ma_space(M_p, a, M_l, D_s, D_l, eta, xi, Amax, 
     mask = (M_p >= q_min * M_l_sorted) & (a >= a_minus) & (a <= a_plus) #identifies the inside of the triangle
     #returns an array with 1 inside the triangle and 0 outside
     return np.where(mask, inside_sensitivity, outside_sensitivity)
+
+
+# ---------------------------------------------------------------------------
+# OTHER
+# ---------------------------------------------------------------------------
+
+
+def kepler_3_law (period, star_mass):
+    """Kepler 3rd law in cgs"""
+    return ((const.G.cgs*star_mass*const.M_sun.cgs/(4*np.pi**2)*period**2)**(1/3)).to(u.au)
+
+def kepler_3_law_inverse(distance, star_mass):
+    a_p = (distance*u.au).to(u.cm)
+    return np.sqrt(a_p**3*4*np.pi**2/(const.G.cgs*star_mass*const.M_sun.cgs))
+
+def radius_mass_exo(radius, rocky = True):
+    if rocky:
+        rho = 5.5* u.g/u.cm**3
+    else:
+        rho = 1* u.g/u.cm**3
+    return (4/3*np.pi*radius**3*rho).to(u.M_earth)
+
+def MMSN (position):
+    """Minimum mass solar nebula according to Hayashi 1981"""
+    return (1700*(position)**(-3/2)*u.g/u.cm**2).to(u.M_earth/u.au**2)
+
+def Z_to_Fe_H (Z):
+    """Fe/H to Z relation according to Burn 2021"""
+    f_dtf_solar = 0.0149 #Lodders 2003
+    return np.log10(Z/f_dtf_solar)
+
+def Fe_H_to_Z (Fe_H):
+    """Z to Fe/H relation according to Burn 2021"""
+    f_dtf_solar = 0.0149 #Lodders 2003
+    return f_dtf_solar*10**Fe_H
+
+
 

@@ -17,6 +17,7 @@ Gauss_to_au_M_E_myr = (1*u.cm**(-1/2)*u.g**(1/2)/u.s).to(u.au**(-1/2)*u.M_earth*
 erg_cgs = (1*u.erg).to(u.cm**2*u.g/u.s**2).value
 erg_s_to_au_M_E_Myr = (1*u.erg/u.s).to(u.au**2*u.M_earth/u.Myr**3).value
 
+# ------------------------------- to save dicts in hdf5 -------------------------------
 # routine to convert the dicts so that they can be stored in the hdf5 file, since hdf5 does not support mixed types
 def save_dict_to_hdf5(grp, d):
     """Recursively save a dict to an hdf5 group, handling mixed types."""
@@ -52,6 +53,7 @@ def save_dict_to_hdf5(grp, d):
         else:
             grp.attrs[key] = str(v)  # fallback for anything else
 
+# ------------------------------- to write on hdf5 -------------------------------
 ## routine to write on file hdf5 the simulation results and the parameters of the simulation
 def save_simulation_hdf5(simulation, params, sim_params, output_folder):
     os.makedirs(output_folder, exist_ok=True)
@@ -90,6 +92,7 @@ def save_simulation_hdf5(simulation, params, sim_params, output_folder):
             elif isinstance(val, (int, float, str, bool)):
                 sp_grp.attrs[key] = val
 
+# ------------------------------- data classes -------------------------------
 @dataclass
 class Params:
     #stellar parameters 
@@ -99,6 +102,8 @@ class Params:
     star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1kG
     M_dot_gas_star: Union[float, str] = "star_mass_linear" #Hartmann_2016, Liu_2019, star_mass_linear, star_mass_quadratic
     mdot_star_func: Callable[[float], float] = field(init=False, repr=False)
+    Mdot_star_scatter: float = 0 #default is the normal H16 relation
+    M_dot_star_downscale: float = 1.0 #default is no downscaling of the Mdot_star function
 
     #disc parameters
     iso_filtering: float = 1
@@ -136,6 +141,7 @@ class Params:
     resonance_trapping: bool = True
     gas_accretion: bool = True
     self_gravity: bool = False
+    migrationI_downscale: float = 1.0
 
     def __post_init__(self):
         # Set star_luminosity as a function of star_mass
@@ -167,6 +173,8 @@ class Params:
                 return lambda t: M_dot_star_t_Mstar(t, self)
             if self.M_dot_gas_star == "Hartmann_2016":
                 return M_dot_star_t
+            if self.M_dot_gas_star == "Hartmann_2016_scatter":
+                return lambda t: M_dot_star_t_scatter(t, self)
             if self.M_dot_gas_star == "star_mass_linear":
                 return lambda t: M_dot_star_linear_scaling(t, self)
             if self.M_dot_gas_star == "star_mass_quadratic":
@@ -223,15 +231,12 @@ sim_params = SimulationParams()
 peb_acc = PebbleAccretion()
 gas_acc = GasAccretion()
 
+# ------------------------------- routine to define the differential equations -------------------------------
 
 def evolve_system(
     times, masses, positions, migration, filtering, peb_acc, gas_acc, params, sim_params):
     """Function that computes the dM/dt, dR/dt and filter fraction"""
 
-    # checks if the planets are in the correct order, throws error if they swap position
-    # if not np.all(positions[:-1] >= positions[1:]):
-    # print('ERROR: PLANETS IN WRONG ORDER')
-    # exit()
     # Allocate empty arrays of filled with 0's
     # They are matrixes: [number of planets x times]
     M_dot = np.zeros_like(masses) 
@@ -246,16 +251,15 @@ def evolve_system(
     flux_ratio = np.zeros(masses.shape) # ratio of the accreted pebble flux and the incoming flux
     
     # disc quantities related to time only
-    mdot_star = params.mdot_star_func(times)    
+    mdot_star = params.mdot_star_func(times)*params.M_dot_star_downscale    
     R_mag_cav = r_magnetic_cavity(mdot_star, params)
-     ###### NOMINAL FLUX ########
+    ###### NOMINAL FLUX ########
     F0_nominal = flux_dtg_t(mdot_star, params)
 
     pos_previous = np.zeros_like(positions) #to check if the planets overtake each other
     pos_out = positions[0] #to kill the planets if they overtake each other
     
     for i in range(sim_params.nr_planets):
-
         # Iceline treatment: cuts the flux in half, increases the vertical stirring
         if params.iceline_alpha_change:
             params.update_alpha_z_iceline(positions[i], iceline(mdot_star, 170, params))
@@ -292,7 +296,6 @@ def evolve_system(
 
         # option for migration
         if migration:
-                
             R_dot[i] = dR_dt_both(times, positions[i], masses[i], H_r, Sigma_gas, params) #includes type II prescription
 
             H_r_previous = H_R(positions[i-1], mdot_star, params) #needed to compute the resonance condition
@@ -360,6 +363,7 @@ def evolve_system(
     #return M_dot, R_dot, filter_frac, flux_on_planet, F0, flux_ratio, R_acc, H_peb, R_acc_H, R_acc_B, M_dot_twoD_B, M_dot_twoD_H, M_dot_threeD_B, M_dot_threeD_H,  M_dot_threeD_unif, sigma_peb, sigma_gas, H_r, acc_regimes, gas_accretion_dict
     return M_dot, R_dot, filter_frac, flux_on_planet, F0, flux_ratio, sigma_peb, sigma_gas, acc_regimes, gas_accretion_dict
 
+# ------------------------------- main routine of integration -------------------------------
 
 def simulate_euler(migration, filtering, peb_acc, gas_acc, params, sim_params, output_folder='sims/gas_acc'):
     """Euler solver for the differential equation"""

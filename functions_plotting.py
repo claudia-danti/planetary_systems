@@ -15,7 +15,11 @@ import matplotlib.colors as mcolors
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.stats import loguniform
 import sim_loader as sim_load
-
+import seaborn as sns
+from matplotlib.lines import Line2D
+from matplotlib.legend_handler import HandlerTuple
+from scipy.stats import gaussian_kde
+from itertools import cycle, islice
 
 ########## GENERIC PLOTTING FUNCTION, FOR M(t), ff(t), GROWTH TRACKS #####################
 # Don't require SimulationResults() objects
@@ -1595,7 +1599,312 @@ def load_simulations_and_planet_dict(folder_paths, H_r_model, simulations, param
         print("Number of simulations loaded:", len(simulations[-1]))
 
         # Compute planet_dict for the folder
-        planet_dicts.append(planet_counter(simulations[-1], parameters[-1], sim_parameters[-1], outer=False))
+        planet_dicts.append(planet_type_counter(simulations[-1], parameters[-1], sim_parameters[-1], outer=False))
         print('planet dict:', planet_dicts[-1])
 
+def create_joint_plot_dataset(simulation_list, parameters_list, sim_parameters_list, per_planet=False):
+    """
+    Flattens the nested [folder][sim] structure into one row per h5 file
+    (per_planet=False) or one row per planet (per_planet=True).
+    """
+    dataset = []
+    for folder_sims, folder_params, folder_sim_params in zip(simulation_list, parameters_list, sim_parameters_list):
+        for sim, params, sim_params in zip(folder_sims, folder_params, folder_sim_params):
+            record = planet_type_counter([sim], [params], [sim_params], per_planet=per_planet)
+            if per_planet:
+                dataset.extend(record)   # list of per-planet dicts
+            else:
+                dataset.append(record)   # single aggregated dict for this sim
+    return pd.DataFrame(dataset)
+#to run aggregated planet count per folder, use per_planet=False, to run per planet count, use per_planet=True
+def create_folder_summary(simulation_list, parameters_list, sim_parameters_list, folder_labels=None):
+    """One row per folder, aggregated across all sims in that folder."""
+    dataset = []
+    for i, (folder_sims, folder_params, folder_sim_params) in enumerate(
+        zip(simulation_list, parameters_list, sim_parameters_list)
+    ):
+        record = planet_type_counter(folder_sims, folder_params, folder_sim_params, per_planet=False)
+        if folder_labels is not None:
+            record['folder'] = folder_labels[i]
+        dataset.append(record)
+    return pd.DataFrame(dataset)
 
+
+# def compute_kde_curves(plot_data, planet_types, mdot_values, column, grid):
+#     """Returns dict {(ptype, mdot): density_curve}, each weighted by sample size."""
+#     curves = {}
+#     for ptype in planet_types:
+#         for mdot in mdot_values:
+#             subset = plot_data[(plot_data['type'] == ptype) & (plot_data['M_dot_star_downscale'] == mdot)]
+#             vals = subset[column].dropna().values
+#             log_vals = np.log10(vals)
+#             if len(np.unique(log_vals)) < 2:
+#                 continue
+#             try:
+#                 kde = gaussian_kde(log_vals, bw_method='scott')
+#             except ValueError:
+#                 continue
+#             density = kde(np.log10(grid)) * len(vals)  # weight by sample size
+#             curves[(ptype, mdot)] = density
+#     return curves
+
+
+# def normalise_curves(curves, per_curve):
+#     """Normalise either per-curve (each peaks at 1) or globally (relative concentration preserved)."""
+#     normalised = {}
+#     if per_curve:
+#         for key, density in curves.items():
+#             normalised[key] = density / density.max()
+#     else:
+#         global_max = max(d.max() for d in curves.values())
+#         for key, density in curves.items():
+#             normalised[key] = density / global_max
+#     return normalised
+
+
+# def plot_joint_distribution_Mdot(data_summary, filename, title, normalise_per_curve=True):
+#     planet_types = ['SE', 'CG', 'WG', 'HJ']
+
+#     type_colors = {'SE': 'C0', 'CG': 'C1', 'WG': 'C2', 'HJ': 'C3'}
+#     other_color = '0.65'
+#     # for the difference set of Mdot values-> different markers and linestyles to distinguish them in the marginal KDEs
+#     markers = ['o', 's', '^', 'D']
+#     linestyles = ['-', '--', '-.', ':']
+
+#     # data
+#     plot_data = data_summary[(data_summary['planet_position'] > 0) & (data_summary['planet_mass'] > 0)].copy()
+#     mdot_values = sorted(plot_data['M_dot_star_downscale'].unique())
+#     # to extend the list authomatically if I increase the number of Mdot values,
+#     #  I can use itertools.cycle to repeat the base markers and linestyles as needed
+#     base_markers = ['o', 's', '^', 'D', 'P', 'X', 'v', '*']
+#     base_linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1)), (0, (5, 1)), (0, (1, 1))]
+
+#     markers = list(islice(cycle(base_markers), len(mdot_values)))
+#     linestyles = list(islice(cycle(base_linestyles), len(mdot_values)))
+
+#     marker_dict = dict(zip(mdot_values, markers))
+#     linestyle_dict = dict(zip(mdot_values, linestyles))
+
+#     # axis limits
+#     y_min, y_max = 0.01, 20000
+#     x_min, x_max = 0.01, 100
+
+#     # ----------------- joint plot -----------------
+#     g = sns.JointGrid(data=plot_data, x='planet_position', y='planet_mass', height=7, ratio=5, space=0)
+
+#     # Other planets plotted in grey
+#     other_data = plot_data[~plot_data['type'].isin(planet_types)]
+#     g.ax_joint.scatter(other_data['planet_position'], other_data['planet_mass'], color=other_color,
+#                         marker='.', s=15, alpha=0.25, zorder=1)
+
+#     # SE / CG / WG / HJ plotted in colors
+#     for ptype in planet_types:
+#         type_data = plot_data[plot_data['type'] == ptype]
+#         for mdot in mdot_values:
+#             subset = type_data[type_data['M_dot_star_downscale'] == mdot]
+#             g.ax_joint.scatter(subset['planet_position'], subset['planet_mass'], color=type_colors[ptype],
+#                                 marker=marker_dict[mdot], s=35, alpha=0.65, linewidth=0.3, zorder=2)
+
+#     # --------------- x-marginal: planet position ----------------
+#     x_grid = np.logspace(np.log10(x_min), np.log10(x_max), 500)
+#     x_curves = compute_kde_curves(plot_data, planet_types, mdot_values, 'planet_position', x_grid)
+#     x_curves = normalise_curves(x_curves, normalise_per_curve)
+
+#     for (ptype, mdot), density in x_curves.items():
+#         g.ax_marg_x.plot(x_grid, density, color=type_colors[ptype], linestyle=linestyle_dict[mdot], linewidth=1.5)
+#         g.ax_marg_x.fill_between(x_grid, density, 0, color=type_colors[ptype], alpha=0.06)
+
+#     # --------------- y-marginal: planet mass ----------------
+#     y_grid = np.logspace(np.log10(y_min), np.log10(y_max), 500)
+#     y_curves = compute_kde_curves(plot_data, planet_types, mdot_values, 'planet_mass', y_grid)
+#     y_curves = normalise_curves(y_curves, normalise_per_curve)
+
+#     for (ptype, mdot), density in y_curves.items():
+#         g.ax_marg_y.plot(density, y_grid, color=type_colors[ptype], linestyle=linestyle_dict[mdot], linewidth=1.5)
+#         g.ax_marg_y.fill_betweenx(y_grid, 0, density, color=type_colors[ptype], alpha=0.06)
+
+#     # ------- log-scales, limits and labels ---------
+#     g.ax_joint.set_xscale('log')
+#     g.ax_joint.set_yscale('log')
+#     g.ax_marg_x.set_xscale('log')
+#     g.ax_marg_y.set_yscale('log')
+#     g.ax_joint.set_xlim(x_min, x_max)
+#     g.ax_joint.set_ylim(y_min, y_max)
+#     g.ax_marg_x.set_xlim(x_min, x_max)
+#     g.ax_marg_y.set_ylim(y_min, y_max)
+
+#     g.ax_joint.set_xlabel('Planet position [AU]', fontsize=15)
+#     g.ax_joint.set_ylabel(r'Planet mass [$M_\oplus$]', fontsize=15)
+#     D_burning = 4130  # deuterium burning limit in Earth masses
+#     g.ax_joint.hlines(D_burning, x_min, x_max, color='grey', linestyle='--', alpha=0.5, linewidth=1.5)
+
+#     # ---------- legend ------------------------
+#     type_handles = [Line2D([0], [0], marker='o', linestyle='None', markerfacecolor=type_colors[ptype],
+#                             markeredgecolor='black', markersize=7, label=ptype) for ptype in planet_types]
+
+#     legend_types = g.ax_joint.legend(handles=type_handles, title='Planet type', loc='lower left',
+#                                       bbox_to_anchor=(0.02, 0.02), frameon=True, fontsize=9, title_fontsize=9)
+#     g.ax_joint.add_artist(legend_types)
+
+#     mdot_handles = []
+#     for mdot in mdot_values:
+#         marker_handle = Line2D([0], [0], marker=marker_dict[mdot], linestyle='None',
+#                                 markerfacecolor='black', markeredgecolor='black', markersize=7)
+#         line_handle = Line2D([0], [0], color='black', linestyle=linestyle_dict[mdot], linewidth=2.5)
+#         mdot_handles.append((marker_handle, line_handle))
+
+#     legend_mdot = g.ax_joint.legend(handles=mdot_handles, labels=[f'{mdot:g}' for mdot in mdot_values],
+#                                      title=r'$\dot{M}_\star$ scale factor', loc='lower right',
+#                                      bbox_to_anchor=(0.98, 0.04), frameon=True, fontsize=10, title_fontsize=10,
+#                                      handlelength=4.5, handleheight=1.5, handletextpad=0.8,
+#                                      handler_map={tuple: HandlerTuple(ndivide=None)})
+
+#     sns.despine(ax=g.ax_joint, top=True, right=True)
+#     g.fig.suptitle(title, fontsize=16, y=1.05)
+#     plt.savefig("figures/opacities/" + filename + ".png", bbox_inches='tight')
+
+
+
+
+def plot_joint_distribution(data_summary, filename, title, group_by='mdot', normalise_per_curve=True):
+    """
+    group_by: 'mdot' or 'alpha' -- selects which parameter distinguishes
+            the marker/linestyle groups (M_dot_star_downscale or alpha).
+    """
+    planet_types = ['SE', 'CG', 'WG', 'HJ']
+    type_colors = {'SE': 'C0', 'CG': 'C1', 'WG': 'C2', 'HJ': 'C3'}
+    other_color = '0.65'
+
+    # ---- config for the two grouping options ----
+    group_config = {
+        'mdot':  {'column': 'M_dot_star_downscale', 'legend_title': r'$\dot{M}_\star$ scale factor'},
+        'alpha': {'column': 'alpha_nu',                'legend_title': r'$\alpha$'},
+    }
+    if group_by not in group_config:
+        raise ValueError(f"group_by must be one of {list(group_config)}, got '{group_by}'")
+
+    group_column = group_config[group_by]['column']
+    group_legend_title = group_config[group_by]['legend_title']
+
+    # data
+    plot_data = data_summary[(data_summary['planet_position'] > 0) & (data_summary['planet_mass'] > 0)].copy()
+    group_values = sorted(plot_data[group_column].unique())
+
+    # markers/linestyles, auto-extending via cycle if there are more group values than base styles
+    base_markers = ['o', 's', '^', 'D', 'P', 'X', 'v', '*']
+    base_linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1)), (0, (5, 1)), (0, (1, 1))]
+
+    markers = list(islice(cycle(base_markers), len(group_values)))
+    linestyles = list(islice(cycle(base_linestyles), len(group_values)))
+
+    marker_dict = dict(zip(group_values, markers))
+    linestyle_dict = dict(zip(group_values, linestyles))
+
+    # axis limits
+    y_min, y_max = 0.01, 20000
+    x_min, x_max = 0.01, 100
+
+    # ----------------- joint plot -----------------
+    g = sns.JointGrid(data=plot_data, x='planet_position', y='planet_mass', height=7, ratio=5, space=0)
+
+    # Other planets plotted in grey
+    other_data = plot_data[~plot_data['type'].isin(planet_types)]
+    g.ax_joint.scatter(other_data['planet_position'], other_data['planet_mass'], color=other_color,
+                        marker='.', s=15, alpha=0.25, zorder=1)
+
+    # SE / CG / WG / HJ plotted in colors
+    for ptype in planet_types:
+        type_data = plot_data[plot_data['type'] == ptype]
+        for gval in group_values:
+            subset = type_data[type_data[group_column] == gval]
+            g.ax_joint.scatter(subset['planet_position'], subset['planet_mass'], color=type_colors[ptype],
+                                marker=marker_dict[gval], s=35, alpha=0.65, linewidth=0.3, zorder=2)
+
+    # --------------- x-marginal: planet position ----------------
+    x_grid = np.logspace(np.log10(x_min), np.log10(x_max), 500)
+    x_curves = compute_kde_curves(plot_data, planet_types, group_values, group_column, 'planet_position', x_grid)
+    x_curves = normalise_curves(x_curves, normalise_per_curve)
+
+    for (ptype, gval), density in x_curves.items():
+        g.ax_marg_x.plot(x_grid, density, color=type_colors[ptype], linestyle=linestyle_dict[gval], linewidth=1.5)
+        g.ax_marg_x.fill_between(x_grid, density, 0, color=type_colors[ptype], alpha=0.06)
+
+    # --------------- y-marginal: planet mass ----------------
+    y_grid = np.logspace(np.log10(y_min), np.log10(y_max), 500)
+    y_curves = compute_kde_curves(plot_data, planet_types, group_values, group_column, 'planet_mass', y_grid)
+    y_curves = normalise_curves(y_curves, normalise_per_curve)
+
+    for (ptype, gval), density in y_curves.items():
+        g.ax_marg_y.plot(density, y_grid, color=type_colors[ptype], linestyle=linestyle_dict[gval], linewidth=1.5)
+        g.ax_marg_y.fill_betweenx(y_grid, 0, density, color=type_colors[ptype], alpha=0.06)
+
+    # ------- log-scales, limits and labels ---------
+    g.ax_joint.set_xscale('log')
+    g.ax_joint.set_yscale('log')
+    g.ax_marg_x.set_xscale('log')
+    g.ax_marg_y.set_yscale('log')
+    g.ax_joint.set_xlim(x_min, x_max)
+    g.ax_joint.set_ylim(y_min, y_max)
+    g.ax_marg_x.set_xlim(x_min, x_max)
+    g.ax_marg_y.set_ylim(y_min, y_max)
+
+    g.ax_joint.set_xlabel('Planet position [AU]', fontsize=15)
+    g.ax_joint.set_ylabel(r'Planet mass [$M_\oplus$]', fontsize=15)
+    D_burning = 4130  # deuterium burning limit in Earth masses
+    g.ax_joint.hlines(D_burning, x_min, x_max, color='grey', linestyle='--', alpha=0.5, linewidth=1.5)
+
+    # ---------- legend ------------------------
+    type_handles = [Line2D([0], [0], marker='o', linestyle='None', markerfacecolor=type_colors[ptype],
+                            markeredgecolor='black', markersize=7, label=ptype) for ptype in planet_types]
+
+    legend_types = g.ax_joint.legend(handles=type_handles, title='Planet type', loc='lower left',
+                                    bbox_to_anchor=(0.02, 0.02), frameon=True, fontsize=9, title_fontsize=9)
+    g.ax_joint.add_artist(legend_types)
+
+    group_handles = []
+    for gval in group_values:
+        marker_handle = Line2D([0], [0], marker=marker_dict[gval], linestyle='None',
+                                markerfacecolor='black', markeredgecolor='black', markersize=7)
+        line_handle = Line2D([0], [0], color='black', linestyle=linestyle_dict[gval], linewidth=2.5)
+        group_handles.append((marker_handle, line_handle))
+
+    legend_group = g.ax_joint.legend(handles=group_handles, labels=[f'{gval:g}' for gval in group_values],
+                                    title=group_legend_title, loc='lower right',
+                                    bbox_to_anchor=(0.98, 0.04), frameon=True, fontsize=10, title_fontsize=10,
+                                    handlelength=4.5, handleheight=1.5, handletextpad=0.8,
+                                    handler_map={tuple: HandlerTuple(ndivide=None)})
+
+    sns.despine(ax=g.ax_joint, top=True, right=True)
+    g.fig.suptitle(title, fontsize=16, y=1.05)
+    plt.savefig("figures/opacities/" + filename + ".png", bbox_inches='tight')
+
+def compute_kde_curves(plot_data, planet_types, group_values, group_column, value_column, grid):
+    """Returns dict {(ptype, gval): density_curve}, each weighted by sample size."""
+    curves = {}
+    for ptype in planet_types:
+        for gval in group_values:
+            subset = plot_data[(plot_data['type'] == ptype) & (plot_data[group_column] == gval)]
+            vals = subset[value_column].dropna().values
+            log_vals = np.log10(vals)
+            if len(np.unique(log_vals)) < 2:
+                continue
+            try:
+                kde = gaussian_kde(log_vals, bw_method='scott')
+            except ValueError:
+                continue
+            density = kde(np.log10(grid)) * len(vals)  # weight by sample size
+            curves[(ptype, gval)] = density
+    return curves
+
+
+def normalise_curves(curves, per_curve):
+    """Normalise either per-curve (each peaks at 1) or globally (relative concentration preserved)."""
+    normalised = {}
+    if per_curve:
+        for key, density in curves.items():
+            normalised[key] = density / density.max()
+    else:
+        global_max = max(d.max() for d in curves.values())
+        for key, density in curves.items():
+            normalised[key] = density / global_max
+    return normalised

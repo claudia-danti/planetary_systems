@@ -371,14 +371,14 @@ def dR_dt(t, position, M_core, H_r, sigma_g, params):
 	"""type one migration according to equation 36 of LJ14 """
 	 
 	c = 2.8
-	dr_dt = -c*M_core/(params.star_mass**2)*sigma_g*position**2*H_r**(-2)*v_k(position, params)
+	dr_dt = -c*params.migrationI_downscale*M_core/(params.star_mass**2)*sigma_g*position**2*H_r**(-2)*v_k(position, params)
 	return dr_dt
 
 def dR_dt_both(t, position, M_core, H_r, sigma_g, params):
     """type one migration according to equation 36 of LJ14 and equation 51 of nerea's paper"""
      
     c = 2.8
-    dr_dt_typeI = -c*M_core/(params.star_mass**2)*sigma_g*position**2*H_r**(-2)*v_k(position, params)
+    dr_dt_typeI = -c*params.migrationI_downscale*M_core/(params.star_mass**2)*sigma_g*position**2*H_r**(-2)*v_k(position, params)
     dr_dt_typeII = dr_dt_typeI*sigma_gap_sigma_gas(M_core, H_r, params)
 
     if np.any(M_core) < np.any(2.3*M_peb_iso(H_r, params)):

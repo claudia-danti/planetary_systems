@@ -1,0 +1,3 @@
+variable,n_with_cg,n_without_cg,mannwhitney_U,p_value
+"semi-major axis (a, AU)",1,35,0.0,0.10172190603816615
+"mass (Msini, Mearth)",1,35,16.0,0.923307419315535
