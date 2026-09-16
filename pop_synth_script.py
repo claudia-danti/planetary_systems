@@ -7,8 +7,7 @@ import astropy.units as ub
 import pandas as pd
 import scipy.stats as stats
 import multiprocessing as mp
-from scipy.integrate import cumulative_trapezoid as cumtrapz
-
+from scipy.integrate import cumulative_trapezoid as cumtrapz 
 # disc parameters
 params_dict = {'St_const': None, 
                'iceline_radius': None,
@@ -19,14 +18,14 @@ params_dict = {'St_const': None,
                 'epsilon_heat':0.5,
                 'v_frag': (1 * u.m/u.s).to(u.au/u.Myr).value,
                 'M_dot_gas_star': "Hartmann_2016_scatter",
-                'M_dot_star_downscale': 1/5,
-                'migrationI_downscale': 1/5,
+                'M_dot_star_downscale': 1/2,
+                'migrationI_downscale': 1/2,
                 'iceline_v_frag_change': True,
                 'kappa':(1*u.m**2/u.kg).to(u.au**2/u.M_earth).value #default is (0.005*u.m**2/u.kg).to(u.au**2/u.M_earth).value
                 }
 
 # ------------------------------sims parameters------------------------------
-output_folder = 'sims/opacities/1Msun/Mdot_scatter/double_planet/100_pairs/1_5_scales'
+output_folder = 'sims/opacities/1Msun/Mdot_scatter/double_planet/100_pairs/1_2_scales_closer'
 N_steps = 5000 #number of steps of the sim 
 num_samples = 1000  # Number of Monte Carlo samples = number of simulations to run
 # seeds for random sampling reproducibility
@@ -154,11 +153,11 @@ t0_samples = (t_0 * np.ones(len(a_p0_samples))) # warning, this also goes in the
 # -----------------------------------------------------
 num_samples = 100
 # outer embryo random sampled between 10 and 30 au, inner embryo random sampled between 0.1 and 10 au
-R_in_outer = 10
+R_in_outer = 1
 R_out_outer = 30
 a_p0_outer_sample = stats.loguniform.rvs(R_in_outer, R_out_outer, size=num_samples, random_state=19)
 R_in = 0.1
-R_out = 5
+R_out = 1
 a_p0_inner_sample = stats.loguniform.rvs(R_in, R_out, size=num_samples, random_state=99)
 n_planets = 2
 for  a_p0_outer, a_p0_inner, t_fin, Z, Mdot_scatter  in zip(a_p0_outer_sample, a_p0_inner_sample, tau_disc_samples, Z_samples, Mdot_scatter_samples):
