@@ -17,10 +17,11 @@ params_dict = {'St_const': None,
                 'epsilon_el': 1e-2,
                 'epsilon_heat':0.5,
                 'v_frag': (1 * u.m/u.s).to(u.au/u.Myr).value,
-                'M_dot_gas_star': "Hartmann_2016_scatter",
+                'M_dot_gas_star': "Hartmann_2016",
                 'M_dot_star_downscale': 1/2,
                 'migrationI_downscale': 1/2,
                 'iceline_v_frag_change': True,
+                'M_dot_star_scatter': True,
                 'kappa':(1*u.m**2/u.kg).to(u.au**2/u.M_earth).value #default is (0.005*u.m**2/u.kg).to(u.au**2/u.M_earth).value
                 }
 
@@ -164,7 +165,10 @@ for  a_p0_outer, a_p0_inner, t_fin, Z, Mdot_scatter  in zip(a_p0_outer_sample, a
     a_p0 = np.array([a_p0_outer, a_p0_inner])
     params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=1*const.M_sun.to(u.M_earth).value, Z = Z, Mdot_star_scatter = Mdot_scatter)
     t0 = (stats.uniform.rvs(loc=0.1, scale=0.9, size=1, random_state=seed_t0) * np.ones(len(a_p0)))
-    mdot_star = M_dot_star(t0, params)
+    # inner edge of the disc, uses Mdot withouth photoevap else it's an implicit equation to solve for R_in
+    # and the photoevaporation does not dominate at the beginning of the disc evolution (so valid approx)
+    r_in =r_magnetic_cavity(M_dot_star_t(t0), params) 
+    mdot_star = M_dot_star_t_photoevap(t0, r_in,params)
     sigma_gas = sigma_gas_steady_state(a_p0, H_R(a_p0, mdot_star, params), mdot_star, params)
     m0 = M0_pla_Mstar(a_p0, H_R(a_p0, mdot_star, params), sigma_gas, params)
 

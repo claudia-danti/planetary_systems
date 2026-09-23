@@ -10,14 +10,16 @@ from collections import Counter
 # ---------------------------------------------------------------------------
 # UNITS AND CONVERSIONS
 # ---------------------------------------------------------------------------
-# masses -> earth masses
+# Standard output units of all the code functions
+# masses -> Mearth
 # times -> Myr
-# lengths -> au
+# lengths -> AU
 G = (const.G.cgs.to(u.au**3 / (u.M_earth * u.Myr**2))).value #approx 1e8
 R_sun_au = (const.R_sun.cgs.to(u.au)).value
 M_sun_M_E = (const.M_sun.to(u.M_earth)).value
 L_sun_au_M_E_Myr = (const.L_sun.cgs).to(u.au**2*u.M_earth/u.Myr**3).value
 M_sun_yr_to_M_E_Myr = (1*u.M_sun/u.yr).to(u.M_earth/u.Myr).value #approx 3e12
+M_E_Myr_to_M_sun_yr = (1*u.M_earth/u.Myr).to(u.M_sun/u.yr).value #approx 3e-12
 m_s_to_au_Myr = (1*u.m/u.s).to(u.au/u.Myr).value #approx 210
 yr_to_Myr = (1*u.yr).to(u.Myr).value
 g_cm2_to_M_E_au2 = (1*u.g/u.cm**2).to(u.M_earth/u.au**2).value
@@ -249,49 +251,30 @@ def r_peb_from_st(st, position, H_r, sigma_gas, params):
 # ---------------------------------------------------------------------------
 
 def M_dot_star_t(t):
-    #Time dependent gas accretion rate accordin to Hartmann et al. 2016 (ann.rev.), lower limit
+    """Hartmann et al. 2016 (ann.rev.), lower limit """
     return 10**(((-1.32)-(1.07)*np.log10(t/yr_to_Myr)))*M_sun_yr_to_M_E_Myr
 
-def M_dot_star_t_scatter(t, params):
-    """
-    Evaluate the Mdot-t relation at time(s) t, applying a FIXED
-    scatter offset (in dex) that is constant across all t.
-
-    Parameters
-    ----------
-    t : float or array
-        Age(s) in years (same convention as M_dot_star_t).
-    params : object
-        An object containing the simulation parameters, including the log offset.
-    Returns
-    -------
-    mdot : ndarray
-        Accretion rate(s) in M_E/Myr.
-    """
-    log_mdot_mean = -1.32 - 1.07 * np.log10(t / yr_to_Myr)
-    return 10**(log_mdot_mean + params.Mdot_star_scatter) * M_sun_yr_to_M_E_Myr
-
 def M_dot_star_t_Mstar(t, params):
-    """Time and stellar mass dependent accretion rate, Eq. (1) Liu et al. 2019b"""
+    """Time and stellar mass dependent accretion rate, Eq. (1) Liu et al. 2019b from Manara et al. 2012"""
     return 10**(-5.12-0.46*np.log10(t/yr_to_Myr)-5.75*np.log10(params.star_mass/M_sun_M_E)+1.17*np.log10(t/yr_to_Myr)*np.log10(params.star_mass/M_sun_M_E))*M_sun_yr_to_M_E_Myr
 
 def M_dot_star_linear_scaling(t, params):
+    """Manual linear scaling added to Hartmann 2016"""
     MdotH16 = 10**(((-1.32)-(1.07)*np.log10(t/yr_to_Myr)))*M_sun_yr_to_M_E_Myr
     return MdotH16*(params.star_mass/(0.7*const.M_sun.cgs.to(u.M_earth).value))
 
 def M_dot_star_quadratic_scaling(t, params):
+    """Manual quadratic scaling added to Hartmann 2016"""
     MdotH16 = 10**(((-1.32)-(1.07)*np.log10(t/yr_to_Myr)))*M_sun_yr_to_M_E_Myr
     return MdotH16*(params.star_mass/(0.7*const.M_sun.cgs.to(u.M_earth).value))**2
 
+
 def M_dot_star(t, params):
-    """Gas accretion rate, can be time dependent or constant"""
-    if params.M_dot_gas_star == "Liu_2019":
-        """Gas accretion rate according to Liu et al. 2019b, equation (1)"""
+    """Gas accretion rate, with all the scalings and possibility of scatter"""
+    if params.M_dot_gas_star == "Manara_2012":
         M_dot_gas = M_dot_star_t_Mstar(t, params)
     elif params.M_dot_gas_star == "Hartmann_2016":
         M_dot_gas = M_dot_star_t(t)
-    elif params.M_dot_gas_star == "Hartmann_2016_scatter":
-        M_dot_gas = M_dot_star_t_scatter(t, params)
     elif params.M_dot_gas_star == "star_mass_linear":
         M_dot_gas = M_dot_star_linear_scaling(t, params)
     elif params.M_dot_gas_star == "star_mass_quadratic":
@@ -299,31 +282,122 @@ def M_dot_star(t, params):
     else: 
         M_dot_gas = params.M_dot_gas_star
 
-    return M_dot_gas
+    log_mdot_mean = np.log10(M_dot_gas)
+    if params.M_dot_star_scatter:
+        # 0.5 dex scatter in log space, as in Hartmann 2016
+        return 10**(log_mdot_mean + 0.5)
+    else:
+        return M_dot_gas
+
+def M_dot_star_t_photoevap(t, R_in, params):
+    """Gas accretion rate, with all the scalings and possibility of scatter, but with photoevaporation"""
+    M_dot_gas = M_dot_star(t, params)
+    t_photoevap = t_photo(params)
+    tau_photoevap = tau_photo(R_in, params)
+    if t < t_photoevap:
+        return M_dot_gas
+    else:
+        return M_dot_gas*np.exp(-(t-t_photoevap)/tau_photoevap)
+    
+# ---------------------------------------------------------------------------
+# PHOTOEVAPORATION FUNCTION
+# ---------------------------------------------------------------------------
+
+def M_dot_photo(params):
+    """Photoevaporation rate according to Owen et al. 2012, with Lx from Bae et al. 2013"""
+    log_Lx = 30.37+1.44*np.log10(params.star_mass/M_sun_M_E)
+    L_x = 10**log_Lx
+    return 6.25e-9*(params.star_mass/M_sun_M_E)**(-0.068)*(L_x/1e30)**(1.14)*M_sun_yr_to_M_E_Myr
+
+def t_photo(params):
+    """Photoevaporation onset, when Mdot = Mdot_photoevap."""
+    Mdot_photoevap = M_dot_photo(params)
+    log_Mdot = np.log10(Mdot_photoevap / M_sun_yr_to_M_E_Myr)
+
+    if params.M_dot_gas_star == "Manara_2012":
+        log_Mstar = np.log10(params.star_mass / M_sun_M_E)
+        numerator = log_Mdot + 5.12 + 5.75*log_Mstar
+        denominator = 1.17 * log_Mstar - 0.46
+
+    elif params.M_dot_gas_star in ["Hartmann_2016","star_mass_linear","star_mass_quadratic",]:
+        denominator = 1.07
+        if params.M_dot_gas_star == "Hartmann_2016":
+            numerator = -(1.32 + log_Mdot)
+        else:
+            log_Mstar = np.log10(params.star_mass / (0.7 * const.M_sun.cgs.to(u.M_earth).value))
+            mass_power = {"star_mass_linear": 1,"star_mass_quadratic": 2,}[params.M_dot_gas_star] #chooses based on what is in params.M_dot_gas_star
+            numerator = -(1.32 + log_Mdot - mass_power*log_Mstar)
+    else:
+        return 1e-8 / Mdot_photoevap
+    
+    if params.M_dot_star_scatter:
+        if params.M_dot_gas_star == "Manara_2012":
+            numerator = numerator - 0.5
+        else:
+            numerator = numerator + 0.5
+
+    return 10**(numerator/denominator)*yr_to_Myr
 
 
+def tau_photo(R_in, params):
+    """Photoevaporation timescale, derived through tau = M_disc (t_photo) / M_dot_star_photoevap"""
+    return M_disc_t(R_in, M_dot_photo(params), params)/M_dot_photo(params)
+
+
+# ---------------------------------------------------------------------------
+# DISC MASS AS A FUNCTION OF TIME
+# ---------------------------------------------------------------------------
+# obtained by integrating 2pi r Sigma_gas dr from r_in to r_out, with Sigma_gas from Simga_g = Mdot/(3 pi alpha Omega_K H^2 )
+# Here the r_in is the magnetic cavity, and r_out is the disc outer radius, which is a free parameter
+
+def M_disc_t_irr(R_in, mdot_star, params):
+    """Disc mass as a function of time for an irradiated disc, with H/r irradiated from Ida et al. 2016"""
+    constant = 14/13*2/3*1e2/(0.024**2)*1e-8*(const.G.to(u.au**3/(u.M_sun*u.yr**2))).value**(-1/2)
+    A = (mdot_star/(1e-8*M_sun_yr_to_M_E_Myr))*(params.alpha/1e-2)**(-1)
+    B = (params.star_luminosity/L_sun_au_M_E_Myr)**(-2/7)*(params.star_mass/M_sun_M_E)**(9/14)
+    return constant*A*B*(params.R_disc**(13/14)-R_in**(13/14))*M_sun_M_E
+
+def M_disc_t_visc(R_in, R_out, mdot_star, params):
+    """Disc mass as a function of time for a viscous disc, with H/r viscous from Danti et al. 2025"""
+    constant = 5/7*2/3*1e2/(0.019**2)*1e-8*(const.G.to(u.au**3/(u.M_sun*u.yr**2))).value**(-1/2)
+    A = (mdot_star/(1e-8*M_sun_yr_to_M_E_Myr))**(3/5)*(params.alpha/1e-2)**(-4/5)*(params.star_mass/M_sun_M_E)**(1/5)
+    B = (params.epsilon_el/1e-2)**(-1/5)*(params.epsilon_heat/0.5)**(-1/5)*(params.Z/0.01)**(-1/5)*(params.a_gr/(0.1*mm_to_au))**(1/5)*(params.rho_gr/g_cm3_to_M_E_au3)**(1/5)
+    return constant*A*B*(R_out**(7/5)-R_in**(7/5))*M_sun_M_E
+
+def M_disc_t(R_in, mdot_star, params):
+    """Disc mass as a function of time, depending on the H/r model"""
+    if params.H_r_model == 'irradiated':
+        return M_disc_t_irr(R_in, mdot_star, params)
+    elif params.H_r_model == 'Lambrechts_mixed':
+        transition_radius = H_r_transition_radius(mdot_star, params)
+        if params.R_disc < transition_radius:
+            return M_disc_t_visc(R_in, params.R_disc, mdot_star, params)
+        else:
+            return M_disc_t_visc(R_in, transition_radius, mdot_star, params) + M_disc_t_irr(transition_radius, mdot_star, params)
+    else:# to add the other cases, for now just return the irradiated case
+        return M_disc_t_irr(R_in, mdot_star, params)
+
+    
 # ---------------------------------------------------------------------------
 # GAS AND PEBBLE SURFACE DENSITY FUNCTIONS
 # ---------------------------------------------------------------------------
 
 def sigma_gas_irr(position, mdot_star, params):
     """Sigma gas for an irradiated disc, equation (13) from Ida et al. 2016"""
-
     return 2.7*1e3*(params.star_mass/M_sun_M_E)**(9/14)*(params.star_luminosity/L_sun_au_M_E_Myr)**(-2/7)*(mdot_star/(1e-8*M_sun_yr_to_M_E_Myr))*(params.alpha/1e-3)**(-1)*(position)**(-15/14)
 
 def sigma_gas_visc_Ida(position, mdot_star, params):
     """Sigma gas for a viscous disc, equation (12) from Ida et al. 2016"""
-
     return 2.1*1e3*(params.star_mass/M_sun_M_E)**(1/5)*(params.alpha/1e-3)**(-4/5)*(mdot_star/(1e-8*M_sun_yr_to_M_E_Myr))**(3/5)*(position)**(-3/5)
 
 def sigma_gas_visc_Liu(position, mdot_star, params):
     """Sigma gas for viscous disc from Liut et al. 2019, equation (8)"""
-
     return 132*(mdot_star/(1e-8*M_sun_yr_to_M_E_Myr))**(1/2)*(params.star_mass/M_sun_M_E)**(1/8)*(params.alpha/1e-2)**(-3/4)*(params.disc_opacity/1e-2)**(-1/4)*(position)**(-3/8)
 
 def sigma_gas_steady_state(position, H_r, mdot_star, params):
     """Gas surface density for a steady state viscously evolving disc, equation (11) in Ida et al. 2016"""
     return mdot_star/(3*np.pi*params.alpha*H_r**2*position**2*omega_k(position, params))
+
 
 ###### PEBBLE SURFACE DENSITIES ############
 # this surface density already contains the NON constant Stokes number of the particles (is obtained combining eq (14), (15), (20) and (24))
@@ -493,7 +567,11 @@ def H_peb(St, position, H_r, params):
     H_gas = position*H_r
     return np.sqrt(params.alpha_z / (St+ params.alpha_z)) * H_gas
 
-
+def H_r_transition_radius(mdot_star, params):
+    """Transition radius between viscous and irradiated disc, equating H_r_irr and H_r_visc_Lambrechts"""
+    visc = 0.019*(params.epsilon_el/1e-2)**(1/10)*(params.epsilon_heat/0.5)**(1/10)*(params.alpha/1e-2)**(-1/10)*(params.Z/0.01)**(1/10)*(params.a_gr/(0.1*mm_to_au))**(-1/10)*(params.rho_gr/g_cm3_to_M_E_au3)**(-1/10)*(mdot_star/(1e-8*M_sun_yr_to_M_E_Myr))**(1/5)*(params.star_mass/M_sun_M_E)**(-7/20)
+    irr = 0.024*(params.star_luminosity/L_sun_au_M_E_Myr)**(1/7)*(params.star_mass/M_sun_M_E)**(-4/7)
+    return (visc/irr)**(140/33)
 # ---------------------------------------------------------------------------
 # PEBBLE ACCRETION MASSES: TRANSITION MASSES, ISOLATION MASS, INITIAL MASS
 # ---------------------------------------------------------------------------

@@ -100,12 +100,12 @@ class Params:
     star_radius: float = field(init=False)  # Will be set in __post_init__  # float = (const.R_sun).to(u.au).value
     star_luminosity: float = field(init=False)  # Will be set in __post_init__  # (const.L_sun.cgs).value *erg_s_to_au_M_E_Myr
     star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1kG
-    M_dot_gas_star: Union[float, str] = "star_mass_linear" #Hartmann_2016, Liu_2019, star_mass_linear, star_mass_quadratic
+    M_dot_gas_star: Union[float, str] = "Manara_2012" #Hartmann_2016, Liu_2019, star_mass_linear, star_mass_quadratic
     mdot_star_func: Callable[[float], float] = field(init=False, repr=False)
-    Mdot_star_scatter: float = 0 #default is the normal H16 relation
     M_dot_star_downscale: float = 1.0 #default is no downscaling of the Mdot_star function
 
     #disc parameters
+    R_disc: float = 120 #value in au
     iso_filtering: float = 1
     tau_disc: float= (5 * u.Myr).value
     disc_opacity: float = 1e-2
@@ -141,6 +141,7 @@ class Params:
     resonance_trapping: bool = True
     gas_accretion: bool = True
     self_gravity: bool = False
+    M_dot_star_scatter: bool = False
     migrationI_downscale: float = 1.0
 
     def __post_init__(self):
