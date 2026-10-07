@@ -6,6 +6,7 @@ from matplotlib import cm
 import pandas as pd
 import scipy.integrate as integrate
 from collections import Counter
+from scipy.interpolate import RegularGridInterpolator
 
 # ---------------------------------------------------------------------------
 # UNITS AND CONVERSIONS
@@ -17,6 +18,7 @@ from collections import Counter
 G = (const.G.cgs.to(u.au**3 / (u.M_earth * u.Myr**2))).value #approx 1e8
 R_sun_au = (const.R_sun.cgs.to(u.au)).value
 M_sun_M_E = (const.M_sun.to(u.M_earth)).value
+M_E_M_sun = (const.M_earth.to(u.M_sun)).value
 L_sun_au_M_E_Myr = (const.L_sun.cgs).to(u.au**2*u.M_earth/u.Myr**3).value
 M_sun_yr_to_M_E_Myr = (1*u.M_sun/u.yr).to(u.M_earth/u.Myr).value #approx 3e12
 M_E_Myr_to_M_sun_yr = (1*u.M_earth/u.Myr).to(u.M_sun/u.yr).value #approx 3e-12
@@ -129,18 +131,181 @@ def r_magnetic_cavity_old(mdot_star, params):
     """Position of the magnetic cavity according to equation (5) of Liu et al. 2017"""
     return (params.star_magnetic_field**4*params.star_radius**12/(4*G*params.star_mass*mdot_star**2))**(1/7)
 
-def r_magnetic_cavity(mdot_star, params):
+def r_magnetic_cavity(mdot_star, t, params):
     """Position of the magnetic cavity according to equation (5) of Liu et al. 2017"""
-    return (params.star_magnetic_field**4*R_star(params.star_mass)**12/(4*G*params.star_mass*mdot_star**2))**(1/7)
+    return (params.star_magnetic_field**4*R_star(t, params)**12/(4*G*params.star_mass*mdot_star**2))**(1/7)
 
 def f_set(position, mass, mdot_star, H_r, sigma_gas, params):
     """Settling efficiency according to Eq. 24 of Ormel & Liu 2018"""
     a_set = 0.5
     return np.exp(-a_set*(v_peb_app(position, mass, mdot_star, H_r, sigma_gas, params)/v_crit_settling(position, mass, mdot_star, H_r, sigma_gas, params))**2)
 
-def R_star(M_star):
-    """Stellar radius according to Demircan & Kahraman 1991 """
-    return 10**(0.003+ 0.724*np.log10(M_star/M_sun_M_E))*R_sun_au
+# # ===================================================================================
+# # BHAC15 stellar evolution tracks (Baraffe et al. 2015) CLASS AND RADIUS FUNCTION
+# # ===================================================================================
+# class BaraffeRadius:
+#     """BHAC15 stellar radius interpolator."""
+
+#     def __init__(self, filename):
+#         """Load BHAC15 tracks and construct the interpolator."""
+
+#         data = np.loadtxt(filename,comments="!",skiprows=43)
+#         M = data[:, 0]          # Msun
+#         log_t = data[:, 1]      # log10(age / yr)
+#         R = data[:, 5]          # Rsun
+
+#         # Stellar masses available in the tracks
+#         masses = np.unique(M)
+
+#         # Common age range covered by all tracks
+#         log_t_min = max(np.min(log_t[M == mass])for mass in masses)
+#         log_t_max = min(np.max(log_t[M == mass])for mass in masses)
+
+#         # Common logarithmic age grid
+#         log_t_grid = np.linspace(log_t_min,log_t_max,500)
+
+#         # Interpolate every mass track onto the common age grid
+#         R_grid = np.empty((len(masses), len(log_t_grid)))
+
+#         for i, mass in enumerate(masses):
+#             mask = M == mass
+#             R_grid[i] = np.interp(log_t_grid,log_t[mask],R[mask])
+
+#         # Store the interpolator inside the class
+#         self.interpolator = RegularGridInterpolator((masses, log_t_grid),R_grid,method="linear",bounds_error=True)
+#         self.masses = masses
+#         self.log_t_grid = log_t_grid
+
+#     # radius calculation function
+#     def __call__(self, time, params):
+#         """Return stellar radius in Rsun, clips the age to the tabulated range 
+#         (the radius is held at its first or last tabulated value outside of the range)"""
+#         time = np.asarray(time, dtype=float) #to fix the shape issue
+#         log_t = np.log10(np.maximum(time, 1e-12) * 1e6)
+#         log_t = np.clip(log_t, self.log_t_grid[0], self.log_t_grid[-1]) #clips the age outside the tabulated range
+#         mass = (params.star_mass * u.M_earth).to(u.M_sun).value
+#         points = np.column_stack([np.full(log_t.size, mass), log_t.ravel()])
+#         return self.interpolator(points).reshape(log_t.shape)
+
+#     # def __call__(self, time, params):
+#     #     """Return stellar radius in Rsun"""
+#     #     time = np.asarray(time)
+#     #     log_t = np.log10(time * 1e6)
+#     #     points = np.column_stack([np.full(log_t.shape, (params.star_mass*u.M_earth).to(u.M_sun).value),log_t])
+#     #     return self.interpolator(points)
+    
+# # one time class initialization to avoid reloading the tracks every time the function is called
+# R_Baraffe = BaraffeRadius("BHAC15_tracks+structure.txt")
+
+
+# def R_star(t, params):
+#     """Stellar radius according to Demircan & Kahraman 1991 """
+#     if params.star_radius == "Demircan":
+#         return 10**(0.003+ 0.724*np.log10(params.star_mass/M_sun_M_E))*R_sun_au
+#     elif params.star_radius == "Baraffe":
+#         return (R_Baraffe(t, params))*R_sun_au
+#     else:
+#         return params.star_radius*R_sun_au
+
+
+class StellarProfile:
+    """R, L and Teff of ONE star of fixed mass as 1D functions of age."""
+
+    __slots__ = ("log_t", "R", "L", "Teff")            # fixed attributes: less memory, slightly faster access
+
+    def __init__(self, log_t, R, L, Teff):
+        self.log_t = log_t                             # log10(age/yr) grid, increasing
+        self.R = R                                     # radius on that grid [Rsun]
+        self.L = L                                     # luminosity on that grid [Lsun]
+        self.Teff = Teff                               # effective temperature on that grid [K]
+
+    def _log_age(self, time_myr):
+        # age in Myr -> log10(age/yr); floor avoids log10(0) at t = 0
+        return np.log10(np.maximum(time_myr, 1e-12)) + 6.0
+
+    def radius(self, time_myr):
+        # np.interp holds the end values outside the grid 
+        return np.interp(self._log_age(time_myr), self.log_t, self.R)
+
+    def luminosity(self, time_myr):
+        return np.interp(self._log_age(time_myr), self.log_t, self.L)
+
+    def teff(self, time_myr):
+        return np.interp(self._log_age(time_myr), self.log_t, self.Teff)
+
+
+class BaraffeTracks:
+    """BHAC15 tracks (Baraffe et al. 2015), loaded once, interpolated on (mass, age)."""
+
+    COL_MASS, COL_LOGT, COL_TEFF, COL_LOGL, COL_RADIUS = 0, 1, 2, 3, 5   # column indices in the file
+
+    def __init__(self, filename, n_age=500):
+        data = np.loadtxt(filename, comments="!", skiprows=43)           # read table, skip header
+        M = data[:, self.COL_MASS]                                       # mass column [Msun]
+        self.masses = np.unique(M)                                       # sorted list of tabulated masses
+
+        tracks = []                                                      # one sorted array per mass
+        for m in self.masses:                                            # loop over tabulated masses
+            trk = data[M == m]                                           # rows belonging to this mass
+            tracks.append(trk[np.argsort(trk[:, self.COL_LOGT])])        # sort by age (np.interp requires it)
+
+        log_t_min = max(t[0, self.COL_LOGT] for t in tracks)             # latest start age among all tracks
+        log_t_max = min(t[-1, self.COL_LOGT] for t in tracks)            # earliest end age among all tracks
+        self.log_t_grid = np.linspace(log_t_min, log_t_max, n_age)       # common log-age grid
+
+        cols = (self.COL_RADIUS, self.COL_LOGL, self.COL_TEFF)           # quantities to interpolate
+        values = np.empty((len(self.masses), n_age, len(cols)))          # array [mass, age, quantity]
+        for i, trk in enumerate(tracks):                                 # for each mass track...
+            for j, col in enumerate(cols):                               # ...and each quantity...
+                values[i, :, j] = np.interp(self.log_t_grid,             # ...resample onto the common grid
+                                            trk[:, self.COL_LOGT], trk[:, col])
+
+        self._interp = RegularGridInterpolator(                          # 2D linear interpolator (mass, age)
+            (self.masses, self.log_t_grid), values,
+            method="linear", bounds_error=True)                          # error if mass is outside the table
+        self._cache = {}                                                 # mass -> StellarProfile
+
+    def profile(self, mass_msun):
+        """Return the (cached) StellarProfile for a given mass in Msun."""
+        key = round(float(mass_msun), 10)                                # rounded float as dictionary key
+        if key not in self._cache:                                       # build only the first time
+            n = self.log_t_grid.size                                     # number of age grid points
+            pts = np.column_stack([np.full(n, key), self.log_t_grid])    # (mass, age) points along the grid
+            try:
+                out = self._interp(pts)                                  # 2D interpolation, ONCE per mass
+            except ValueError as err:                                    # mass outside table range
+                raise ValueError(
+                    f"Mass {key:.4g} Msun outside table range "
+                    f"[{self.masses[0]}, {self.masses[-1]}] Msun") from err
+            self._cache[key] = StellarProfile(                           # store the 1D profile
+                self.log_t_grid, out[:, 0], 10.0 ** out[:, 1], out[:, 2])  # table gives log10(L/Lsun)
+        return self._cache[key]                                          # fast path on all later calls
+
+
+BARAFFE = BaraffeTracks("BHAC15_tracks+structure.txt")                   # one-time load of the file
+
+
+def _profile(params):
+    # star_mass is in Earth masses in your code; convert and fetch the cached profile
+    return BARAFFE.profile(params.star_mass * M_E_M_sun)
+
+
+def R_star(t, params):
+    """Stellar radius in AU, t in Myr, from Baraffe et al. 2015 or Demircan & Kahraman 1991."""
+    mode = params.star_radius                                            # model selector or fixed number
+    if mode == "Demircan":                                               # Demircan & Kahraman 1991 relation
+        return 10 ** (0.003 + 0.724 * np.log10(params.star_mass / M_sun_M_E)) * R_sun_au
+    if mode == "Baraffe":                                                # BHAC15 track value
+        return _profile(params).radius(t) * R_sun_au
+    return mode * R_sun_au                                               # fixed radius given in Rsun
+
+
+def L_star(t, params):
+    """Luminosity in Lsun, t in Myr, from Baraffe et al. 2015 or fixed number."""
+    mode = params.star_luminosity                                        # "Baraffe" or fixed number
+    if mode == "Baraffe":                                                # BHAC15 track value
+        return _profile(params).luminosity(t)
+    return mode                                                          # fixed luminosity in Lsun
 
 # ---------------------------------------------------------------------------
 # ICELINE FUNCTIONS
@@ -294,10 +459,15 @@ def M_dot_star_t_photoevap(t, R_in, params):
     M_dot_gas = M_dot_star(t, params)
     t_photoevap = t_photo(params)
     tau_photoevap = tau_photo(R_in, params)
-    if t < t_photoevap:
-        return M_dot_gas
-    else:
-        return M_dot_gas*np.exp(-(t-t_photoevap)/tau_photoevap)
+    # Calculate the exponential decay factor
+    decay = np.exp(-np.clip(t - t_photoevap, 0, None) / tau_photoevap)
+    return M_dot_gas * decay
+    # # the t vector has the dimension of the nr of planets, still work in progress on how to solve it
+    # # with t works for single planets, for multiples needs t[...] else throws true value of array ois ambiguous
+    # if t < t_photoevap:
+    #     return M_dot_gas
+    # else:
+    #     return M_dot_gas*np.exp(-(t-t_photoevap)/tau_photoevap)
     
 # ---------------------------------------------------------------------------
 # PHOTOEVAPORATION FUNCTION
@@ -651,10 +821,10 @@ def M0_pla_Mstar(position, H_r, sigma_gas, params):
     f = 400
     return 2e-3*(f/400)*(C/5e-5)*(gamma*np.pi)**(a+1)*(H_r/0.05)**(3+b)*(params.star_mass/(0.1*M_sun_M_E))*(1*u.M_earth).value
 
-def L_star(M_star):
-    """"Stellar luminosity from Fig. 3 Liu et al.2019 for t=1Myr"""
-    #theoretically I should put +0.001 to match the Liu et al boundary conditions
-    return ((M_star/M_sun_M_E)**(3/2))*(const.L_sun.cgs.to(u.au**2*u.M_earth/u.Myr**3).value)#(const.L_sun.cgs.value)*erg_s_to_au_M_E_Myr
+# def L_star(M_star):
+#     """"Stellar luminosity from Fig. 3 Liu et al.2019 for t=1Myr"""
+#     #theoretically I should put +0.001 to match the Liu et al boundary conditions
+#     return ((M_star/M_sun_M_E)**(3/2))*(const.L_sun.cgs.to(u.au**2*u.M_earth/u.Myr**3).value)#(const.L_sun.cgs.value)*erg_s_to_au_M_E_Myr
 
 # ---------------------------------------------------------------------------
 # STELLAR IMFs
@@ -789,37 +959,41 @@ def planet_classification(mass, position):
             return 'giant_other'   # giant, but outside the defined position ranges
     else:
         return 'unclassified'
+    
+# Maps each fine-grained type to a broader category.
+TYPE_GROUPS = {
+    'HJ': 'giant', 'WG': 'giant', 'CG': 'giant', 'giant_other': 'giant',
+    'sub_giants_in': 'sub_giant', 'sub_giants_out': 'sub_giant',
+    'terr_in': 'terrestrial', 'sub_E': 'terrestrial',
+    'SE': 'super_earth', 'SE_sabotta': 'super_earth',
+    'unclassified': 'unclassified',
+}
 
-
-def planet_type_counter(simulations, parameters, sim_parameters, outer = False, per_planet = False):
+def planet_type_counter(simulations, parameters, sim_parameters, outer=False, per_planet=False):
     """Counts the types of planets in the simulation"""
     star_mass = []
-    model =  parameters[0].H_r_model
-    type_counts = Counter() #new empty counter
+    model = parameters[0].H_r_model
+    type_counts = Counter()
     planet_records = []
 
-    # loop all sims
     for i in range(len(simulations)):
         sim = simulations[i]
         params = parameters[i]
         sim_params = sim_parameters[i]
         star_mass.append(params.star_mass)
-        # option to exclude the outer giant in the counting
-        # (it was from Danti et al. 2025) 
         first_planet = 1 if outer else 0
-        # loop all planets in the sim
         for p in range(first_planet, sim_params.nr_planets):
-            idx = idxs (sim.time[p].value, sim.mass[p].value, sim.position[p].value, sim.filter_fraction[p], 
-                            sim.dR_dt[p], sim.dM_dt[p], params, True)
+            idx = idxs(sim.time.value, sim.mass[p].value, sim.position[p].value, sim.filter_fraction[p],
+                       sim.dR_dt[p], sim.dM_dt[p], params, True)
             stop_mig_idx = idx['stop_mig_idx'].values[0]
             m_fin_idx = stop_mig_idx
 
             mass_earth = sim.mass[p, m_fin_idx].to(u.M_earth).value
             position_au = sim.position[p, m_fin_idx].to(u.au).value
             ptype = planet_classification(mass_earth, position_au)
- 
-            type_counts[ptype] += 1 #count the planet type per each planet category
- 
+
+            type_counts[ptype] += 1
+
             if per_planet:
                 planet_records.append({
                     'sim_idx': i,
@@ -832,12 +1006,12 @@ def planet_type_counter(simulations, parameters, sim_parameters, outer = False, 
                     'M_dot_star_downscale': params.M_dot_star_downscale,
                     'kappa_envelope': params.kappa,
                     'type': ptype,
+                    'group': TYPE_GROUPS.get(ptype, 'unclassified'),
                 })
 
-    # returns the planet records if per_planet is True, otherwise returns the aggregated counts
     if per_planet:
         return planet_records
-    # returns 0 if the key is not present in the counter
+
     sub_giants_in = type_counts.get('sub_giants_in', 0)
     sub_giants_out = type_counts.get('sub_giants_out', 0)
     terr_in = type_counts.get('terr_in', 0)
@@ -846,7 +1020,6 @@ def planet_type_counter(simulations, parameters, sim_parameters, outer = False, 
     WG = type_counts.get('WG', 0)
     CG = type_counts.get('CG', 0)
 
-    # aggregated counts for the simulations
     return {
         'model': model,
         'star_mass': params.star_mass,
@@ -862,10 +1035,14 @@ def planet_type_counter(simulations, parameters, sim_parameters, outer = False, 
         'sub_giants': sub_giants_in + sub_giants_out,
         'terr_in': terr_in,
         'terr_tot': terr_in + sub_E,
-        'giant': HJ + WG + CG + type_counts.get('giant_other', 0),
+        'giants': HJ + WG + CG + type_counts.get('giant_other', 0),
         'tot_planets': sum(type_counts.values()),
     }
 
+# ---------------------------------------------------------------------------
+# INDEXING WHERE THE PLANETS STOP MIGRATING OR REACH ISOLATION MASS
+# ---------------------------------------------------------------------------
+# returns an index dictionary with the indices of the first time the planet reaches isolation mass, stops migrating, or reaches the inner edge of the disc
 
 def idxs (time, mass, position, filter_fraction, dR_dt, dM_dt, params, migration, **kwargs):
     #Creates the index dictionary

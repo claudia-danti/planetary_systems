@@ -97,8 +97,8 @@ def save_simulation_hdf5(simulation, params, sim_params, output_folder):
 class Params:
     #stellar parameters 
     star_mass: float = (const.M_sun).to(u.M_earth).value
-    star_radius: float = field(init=False)  # Will be set in __post_init__  # float = (const.R_sun).to(u.au).value
-    star_luminosity: float = field(init=False)  # Will be set in __post_init__  # (const.L_sun.cgs).value *erg_s_to_au_M_E_Myr
+    star_radius: Optional[u.Quantity] = "Baraffe" # options: Demircan, const.R_sun.cgs
+    star_luminosity: Optional[u.Quantity] = "Baraffe"  # options: Baraffe, const.L_sun.cgs
     star_magnetic_field: float = 1e3*Gauss_to_au_M_E_myr #=1kG
     M_dot_gas_star: Union[float, str] = "Manara_2012" #Hartmann_2016, Liu_2019, star_mass_linear, star_mass_quadratic
     mdot_star_func: Callable[[float], float] = field(init=False, repr=False)
@@ -145,9 +145,7 @@ class Params:
     migrationI_downscale: float = 1.0
 
     def __post_init__(self):
-        # Set star_luminosity as a function of star_mass
-        self.star_luminosity = L_star(self.star_mass)
-        self.star_radius = R_star(self.star_mass)
+        # Sets the mdot_star_func attribute based on the M_dot_gas_star parameter
         self.mdot_star_func = self._build_mdot_star_func()
 
     def update_alpha_z_iceline(self, pos, iceline_radius):
@@ -253,7 +251,7 @@ def evolve_system(
     
     # disc quantities related to time only
     mdot_star = params.mdot_star_func(times)*params.M_dot_star_downscale    
-    R_mag_cav = r_magnetic_cavity(mdot_star, params)
+    R_mag_cav = r_magnetic_cavity(mdot_star, times, params)
     ###### NOMINAL FLUX ########
     F0_nominal = flux_dtg_t(mdot_star, params)
 

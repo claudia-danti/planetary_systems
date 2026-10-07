@@ -17,16 +17,17 @@ params_dict = {'St_const': None,
                 'epsilon_el': 1e-2,
                 'epsilon_heat':0.5,
                 'v_frag': (1 * u.m/u.s).to(u.au/u.Myr).value,
+                "star_radius": "Baraffe",
                 'M_dot_gas_star': "Hartmann_2016",
-                'M_dot_star_downscale': 1/2,
-                'migrationI_downscale': 1/2,
+                'M_dot_star_downscale': 1,
+                'migrationI_downscale': 1,
                 'iceline_v_frag_change': True,
                 'M_dot_star_scatter': True,
-                'kappa':(1*u.m**2/u.kg).to(u.au**2/u.M_earth).value #default is (0.005*u.m**2/u.kg).to(u.au**2/u.M_earth).value
+                'kappa':(0.005*u.m**2/u.kg).to(u.au**2/u.M_earth).value #default is (0.005*u.m**2/u.kg).to(u.au**2/u.M_earth).value
                 }
 
 # ------------------------------sims parameters------------------------------
-output_folder = 'sims/opacities/1Msun/Mdot_scatter/double_planet/100_pairs/1_2_scales_closer'
+output_folder = 'sims/new_Rstar_Lstar/'
 N_steps = 5000 #number of steps of the sim 
 num_samples = 1000  # Number of Monte Carlo samples = number of simulations to run
 # seeds for random sampling reproducibility
@@ -73,16 +74,10 @@ sigma = 2  # Standard deviation
 # Generate random tau_disc values from a Gaussian distribution
 tau_disc_samples = np.random.normal(mu, sigma, num_samples)
 
-# ---------------------- Gas accretion rate scatter -------------------
-scatter_dex = 0.5
-rng = np.random.default_rng(42)
-# one offset per simulation, drawn ONCE
-Mdot_scatter_samples = rng.normal(0.0, scatter_dex, num_samples)
-
 # ---------------------- Initial conditions (position and insertion time) -------------------
 # initial positions and times for the planets, sampled from uniform and loguniform distributions
 t_0 = stats.uniform.rvs(loc=0.1, scale=0.9, size=num_samples, random_state=seed_t0)
-R_in = 0.1
+R_in = 1
 R_out = 30
 a_p0_samples = stats.loguniform.rvs(R_in, R_out, size=num_samples, random_state=seed_ap0)
 t0_samples = (t_0 * np.ones(len(a_p0_samples))) # warning, this also goes in the initial conditions when doing mulitple planets otherwise it won't work
@@ -92,29 +87,30 @@ t0_samples = (t_0 * np.ones(len(a_p0_samples))) # warning, this also goes in the
 # SINGLE PLANET SIMULATIONS
 # -----------------------------------------------------
 
-# for  a_p0, t0, t_fin, Z, Mdot_scatter  in zip(a_p0_samples, t0_samples, tau_disc_samples, Z_samples, Mdot_scatter_samples):
+for  a_p0, t0, t_fin, Z  in zip(a_p0_samples, t0_samples, tau_disc_samples, Z_samples):
 
-#     params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=1*const.M_sun.to(u.M_earth).value, Z = Z, Mdot_star_scatter = Mdot_scatter)
-#     mdot_star = M_dot_star(t0, params)
-#     sigma_gas_inner = sigma_gas_steady_state(a_p0, H_R(a_p0, mdot_star, params), mdot_star, params)
-#     m0 = M0_pla_Mstar(a_p0, H_R(a_p0, mdot_star, params), sigma_gas_inner, params)
+    params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=1.*const.M_sun.to(u.M_earth).value, Z = Z)
+    r_in =r_magnetic_cavity(M_dot_star(t0, params),t0, params) 
+    mdot_star = M_dot_star_t_photoevap(t0, r_in,params)
+    sigma_gas_inner = sigma_gas_steady_state(a_p0, H_R(a_p0, mdot_star, params), mdot_star, params)
+    m0 = M0_pla_Mstar(a_p0, H_R(a_p0, mdot_star, params), sigma_gas_inner, params)
 
-#     # initial conditions for the simulation, must be arrays
-#     a_p0 = np.array([a_p0])
-#     m_0 = np.array([m0])
-#     t_0 = np.array([t0])
+    # initial conditions for the simulation, must be arrays
+    a_p0 = np.array([a_p0])
+    m_0 = np.array([m0])
+    t_0 = np.array([t0])
 
-#     sim_params_dict = {'N_step': N_steps,
-#                     'm0': m_0,
-#                     'a_p0': a_p0,
-#                     't0': t_0,
-#                     't_fin': t_fin,
-#                 }
-#     sim_params = code_gas.SimulationParams(**sim_params_dict)
-#     peb_acc = code_gas.PebbleAccretion(simplified_acc=False)
-#     gas_acc = peb.GasAccretion()
+    sim_params_dict = {'N_step': N_steps,
+                    'm0': m_0,
+                    'a_p0': a_p0,
+                    't0': t_0,
+                    't_fin': t_fin,
+                }
+    sim_params = code_gas.SimulationParams(**sim_params_dict)
+    peb_acc = code_gas.PebbleAccretion(simplified_acc=False)
+    gas_acc = peb.GasAccretion()
 
-#     result = code_gas.simulate_euler(migration = True, filtering = True, peb_acc = peb_acc, gas_acc=gas_acc, params=params, sim_params=sim_params, output_folder=output_folder)
+    result = code_gas.simulate_euler(migration = True, filtering = True, peb_acc = peb_acc, gas_acc=gas_acc, params=params, sim_params=sim_params, output_folder=output_folder)
 
 # -----------------------------------------------------
 # MULTIPLE PLANET SIMULATIONS
@@ -152,34 +148,34 @@ t0_samples = (t_0 * np.ones(len(a_p0_samples))) # warning, this also goes in the
 # -----------------------------------------------------
 # TWO PLANET SIMULATIONS
 # -----------------------------------------------------
-num_samples = 100
-# outer embryo random sampled between 10 and 30 au, inner embryo random sampled between 0.1 and 10 au
-R_in_outer = 1
-R_out_outer = 30
-a_p0_outer_sample = stats.loguniform.rvs(R_in_outer, R_out_outer, size=num_samples, random_state=19)
-R_in = 0.1
-R_out = 1
-a_p0_inner_sample = stats.loguniform.rvs(R_in, R_out, size=num_samples, random_state=99)
-n_planets = 2
-for  a_p0_outer, a_p0_inner, t_fin, Z, Mdot_scatter  in zip(a_p0_outer_sample, a_p0_inner_sample, tau_disc_samples, Z_samples, Mdot_scatter_samples):
-    a_p0 = np.array([a_p0_outer, a_p0_inner])
-    params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=1*const.M_sun.to(u.M_earth).value, Z = Z, Mdot_star_scatter = Mdot_scatter)
-    t0 = (stats.uniform.rvs(loc=0.1, scale=0.9, size=1, random_state=seed_t0) * np.ones(len(a_p0)))
-    # inner edge of the disc, uses Mdot withouth photoevap else it's an implicit equation to solve for R_in
-    # and the photoevaporation does not dominate at the beginning of the disc evolution (so valid approx)
-    r_in =r_magnetic_cavity(M_dot_star_t(t0), params) 
-    mdot_star = M_dot_star_t_photoevap(t0, r_in,params)
-    sigma_gas = sigma_gas_steady_state(a_p0, H_R(a_p0, mdot_star, params), mdot_star, params)
-    m0 = M0_pla_Mstar(a_p0, H_R(a_p0, mdot_star, params), sigma_gas, params)
+# num_samples = 200
+# # outer embryo random sampled between 10 and 30 au, inner embryo random sampled between 0.1 and 10 au
+# R_in_outer = 1
+# R_out_outer = 30
+# a_p0_outer_sample = stats.loguniform.rvs(R_in_outer, R_out_outer, size=num_samples, random_state=19)
+# R_in = 0.1
+# R_out = 1
+# a_p0_inner_sample = stats.loguniform.rvs(R_in, R_out, size=num_samples, random_state=99)
+# n_planets = 2
+# for  a_p0_outer, a_p0_inner, t_fin, Z  in zip(a_p0_outer_sample, a_p0_inner_sample, tau_disc_samples, Z_samples):
+#     a_p0 = np.array([a_p0_outer, a_p0_inner])
+#     params = code_gas.Params(**params_dict, H_r_model='Lambrechts_mixed', star_mass=1*const.M_sun.to(u.M_earth).value, Z = Z)
+#     t0 = (stats.uniform.rvs(loc=0.1, scale=0.9, size=1, random_state=seed_t0) * np.ones(len(a_p0)))
+#     # inner edge of the disc, uses Mdot withouth photoevap else it's an implicit equation to solve for R_in
+#     # and the photoevaporation does not dominate at the beginning of the disc evolution (so valid approx)
+#     r_in =r_magnetic_cavity(M_dot_star(t0, params), params) 
+#     mdot_star = M_dot_star_t_photoevap(t0, r_in,params)
+#     sigma_gas = sigma_gas_steady_state(a_p0, H_R(a_p0, mdot_star, params), mdot_star, params)
+#     m0 = M0_pla_Mstar(a_p0, H_R(a_p0, mdot_star, params), sigma_gas, params)
 
-    sim_params_dict = {'N_step': N_steps,
-                    'm0': m0,
-                    'a_p0': a_p0,
-                    't0': t0,
-                    't_fin': t_fin,
-                }
-    sim_params = code_gas.SimulationParams(**sim_params_dict)
-    peb_acc = code_gas.PebbleAccretion(simplified_acc=False)
-    gas_acc = peb.GasAccretion()
+#     sim_params_dict = {'N_step': N_steps,
+#                     'm0': m0,
+#                     'a_p0': a_p0,
+#                     't0': t0,
+#                     't_fin': t_fin,
+#                 }
+#     sim_params = code_gas.SimulationParams(**sim_params_dict)
+#     peb_acc = code_gas.PebbleAccretion(simplified_acc=False)
+#     gas_acc = peb.GasAccretion()
 
-    result = code_gas.simulate_euler(migration = True, filtering = True, peb_acc = peb_acc, gas_acc=gas_acc, params=params, sim_params=sim_params, output_folder=output_folder)
+#     result = code_gas.simulate_euler(migration = True, filtering = True, peb_acc = peb_acc, gas_acc=gas_acc, params=params, sim_params=sim_params, output_folder=output_folder)
